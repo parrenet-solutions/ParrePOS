@@ -1,0 +1,9 @@
+/.env
+/vendor/
+/storage/logs/
+/storage/uploads/
+/storage/pdf/
+/storage/xml/
+/storage/templates/
+.DS_Store
+Thumbs.db
