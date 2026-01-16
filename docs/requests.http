@@ -1,0 +1,31 @@
+### Health
+GET http://localhost/health
+
+### Login
+POST http://parrepos.local/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@demo.local",
+  "password": "Admin12345!"
+}
+
+### Refresh
+POST http://parrepos.local/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJyZWZyZXNoIiwic3ViIjoxLCJ0ZW5hbnRfaWQiOjEsImlhdCI6MTc2ODUzNzI3NiwiZXhwIjoxNzY5NzQ2ODc2LCJqdGkiOiIxYjY3MTdmMzIyZWU0MDBjZmZmZjAwZjVjZDg1ZjNjMSJ9.1yiiU-WAoFfNtnO_43NU2eYsCetbXRsl_T_jXaFnZmM"
+}
+
+### Logout
+POST http://parrepos.local/api/v1/auth/logout
+Content-Type: application/json
+
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJyZWZyZXNoIiwic3ViIjoxLCJ0ZW5hbnRfaWQiOjEsImlhdCI6MTc2ODUzNzMyNCwiZXhwIjoxNzY5NzQ2OTI0LCJqdGkiOiI2Mzg0Y2JlMjlhZTVmOWFjZDEwZjBjNzVjNjAzZmNhOSJ9.wx4LtN5FBgvkgo3hq2EeDB0VwoE_jmevQW9PlCc3nn4"
+}
+
+### Me
+GET http://parrepos.local/api/v1/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTM3MzczLCJleHAiOjE3Njg1MzgyNzMsImp0aSI6ImRjYzU5NDk0MjIwZTg0OTcyNTM5MDM3NzMwMDFmNzIyIn0.-PqMiYwuG5cK-KjK2sGqf7NKh3TaE8vGKhT5XJG7D_g
