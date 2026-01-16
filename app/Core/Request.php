@@ -11,6 +11,7 @@ class Request
     private string $rawBody;
     private ?array $json;
     private array $attributes = [];
+    private array $params = [];
 
     public function __construct(string $method, string $path, array $headers, array $query, string $rawBody, ?array $json)
     {
@@ -50,9 +51,22 @@ class Request
         return $clone;
     }
 
+    public function withParams(array $params): self
+    {
+        $clone = clone $this;
+        $clone->params = $params;
+
+        return $clone;
+    }
+
     public function getAttribute(string $key, mixed $default = null): mixed
     {
         return $this->attributes[$key] ?? $default;
+    }
+
+    public function getParam(string $key, mixed $default = null): mixed
+    {
+        return $this->params[$key] ?? $default;
     }
 
     public function getMethod(): string

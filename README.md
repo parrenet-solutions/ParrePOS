@@ -28,6 +28,12 @@ Ejecuta el seed para crear tenant demo + admin:
 php bin/console.php seed:dev
 ```
 
+## Worker (PDF / Email / Recurrentes)
+Ejecuta el worker para procesar colas (Redis) o pendientes en BD:
+```bash
+php bin/worker.php run
+```
+
 ## Variables de entorno
 Ver `.env.example` para los valores base.
 

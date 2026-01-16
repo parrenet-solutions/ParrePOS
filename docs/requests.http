@@ -1,5 +1,5 @@
 ### Health
-GET http://localhost/health
+GET http://parrepos.local/health
 
 ### Login
 POST http://parrepos.local/api/v1/auth/login
@@ -15,17 +15,82 @@ POST http://parrepos.local/api/v1/auth/refresh
 Content-Type: application/json
 
 {
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJyZWZyZXNoIiwic3ViIjoxLCJ0ZW5hbnRfaWQiOjEsImlhdCI6MTc2ODUzNzI3NiwiZXhwIjoxNzY5NzQ2ODc2LCJqdGkiOiIxYjY3MTdmMzIyZWU0MDBjZmZmZjAwZjVjZDg1ZjNjMSJ9.1yiiU-WAoFfNtnO_43NU2eYsCetbXRsl_T_jXaFnZmM"
-}
-
-### Logout
-POST http://parrepos.local/api/v1/auth/logout
-Content-Type: application/json
-
-{
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJyZWZyZXNoIiwic3ViIjoxLCJ0ZW5hbnRfaWQiOjEsImlhdCI6MTc2ODUzNzMyNCwiZXhwIjoxNzY5NzQ2OTI0LCJqdGkiOiI2Mzg0Y2JlMjlhZTVmOWFjZDEwZjBjNzVjNjAzZmNhOSJ9.wx4LtN5FBgvkgo3hq2EeDB0VwoE_jmevQW9PlCc3nn4"
+  "refresh_token": "{{refresh_token}}"
 }
 
 ### Me
 GET http://parrepos.local/api/v1/me
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTM3MzczLCJleHAiOjE3Njg1MzgyNzMsImp0aSI6ImRjYzU5NDk0MjIwZTg0OTcyNTM5MDM3NzMwMDFmNzIyIn0.-PqMiYwuG5cK-KjK2sGqf7NKh3TaE8vGKhT5XJG7D_g
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQxMjgzLCJleHAiOjE3Njg1NDIxODMsImp0aSI6IjI1NjY2NGQxMDI1MjIwYjYyYjdmZDIxM2EyNzFmYTBjIn0.-ASuhMlBDmDvoXXL1L-_LML9JCtwjDAS9qhg3tx3cbs
+
+### Crear cliente
+POST http://parrepos.local/api/v1/customers
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+Content-Type: application/json
+
+{
+  "name": "Cliente Demo",
+  "type": "PERSON",
+  "doc_number": "001-0000000-1",
+  "email": "cliente@demo.local",
+  "phone": "8090000000",
+  "status": "ACTIVE"
+}
+
+### Crear item
+POST http://parrepos.local/api/v1/items
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+Content-Type: application/json
+
+{
+  "type": "SERVICE",
+  "name": "Servicio de ejemplo",
+  "price": 1000,
+  "itbis_rate": 0.18,
+  "status": "ACTIVE"
+}
+
+### Crear factura (draft)
+POST http://parrepos.local/api/v1/invoices
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQxMjgzLCJleHAiOjE3Njg1NDIxODMsImp0aSI6IjI1NjY2NGQxMDI1MjIwYjYyYjdmZDIxM2EyNzFmYTBjIn0.-ASuhMlBDmDvoXXL1L-_LML9JCtwjDAS9qhg3tx3cbs
+Content-Type: application/json
+
+{
+  "customer_id": 1,
+  "items": [
+    {"name": "Servicio de ejemplo", "qty": 1, "unit_price": 1000, "discount": 0, "tax_rate": 0.18}
+  ]
+}
+
+### Emitir factura
+POST http://parrepos.local/api/v1/invoices/1/issue
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+
+### Obtener PDF
+GET http://parrepos.local/api/v1/invoices/1/pdf
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+
+### Enviar email
+POST http://parrepos.local/api/v1/invoices/1/send-email
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+Content-Type: application/json
+
+{
+  "to": "cliente@demo.local"
+}
+
+### Recurrente (si enabled)
+POST http://parrepos.local/api/v1/recurring-rules
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+Content-Type: application/json
+
+{
+  "customer_id": 1,
+  "interval_days": 30,
+  "items": [
+    {"name": "Servicio recurrente", "qty": 1, "unit_price": 500, "discount": 0, "tax_rate": 0.18}
+  ]
+}
+### Recurrente (si enabled)
+GET http://parrepos.local/api/v1/customers
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsIpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+Content-Type: application/json

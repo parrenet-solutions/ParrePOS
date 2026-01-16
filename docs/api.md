@@ -1,4 +1,4 @@
-# API ParrePos (Wave 0)
+# API ParrePos (Wave 1)
 
 Base URL: `/api/v1`
 
@@ -8,22 +8,8 @@ Base URL: `/api/v1`
 Body:
 ```json
 {
-  "email": "admin@tenant.com",
-  "password": "secret"
-}
-```
-
-Respuesta:
-```json
-{
-  "ok": true,
-  "data": {
-    "access_token": "...",
-    "refresh_token": "...",
-    "token_type": "Bearer",
-    "expires_in": 900
-  },
-  "meta": {"request_id": "...", "ts": "..."}
+  "email": "admin@demo.local",
+  "password": "Admin12345!"
 }
 ```
 
@@ -46,10 +32,9 @@ Body:
 ## Health
 
 ### GET /health
-Sin autenticación.
-Alternativa directa: `public/health.php`.
+Sin autenticación. Alternativa directa: `public/health.php`.
 
-## Ejemplo protegido
+## Sesión
 
 ### GET /me
 Headers:
@@ -66,16 +51,88 @@ Respuesta:
     "email": "admin@demo.local",
     "tenant_id": 1,
     "roles": ["OWNER"],
-    "permissions": ["auth.*"]
+    "permissions": ["invoices.read"]
   },
   "meta": {"request_id": "...", "ts": "..."}
 }
 ```
 
-### GET /secure-example
-Headers:
-```
-Authorization: Bearer <access_token>
+## Customers
+
+### POST /customers
+### PUT /customers/{id}
+### GET /customers/{id}
+### GET /customers?q=demo
+
+Campos: `name` (req), `type` (PERSON|BUSINESS), `doc_number` (único por tenant si existe), `email`, `phone`, `status`.
+
+## Catalog Items
+
+### POST /items
+### PUT /items/{id}
+### GET /items/{id}
+### GET /items?q=servicio
+
+Campos: `type` (PRODUCT|SERVICE), `name`, `price`, `itbis_rate` (0|0.16|0.18), `status`.
+
+## Invoices
+
+### POST /invoices
+Body:
+```json
+{
+  "customer_id": 1,
+  "items": [
+    {"name": "Servicio", "qty": 1, "unit_price": 1000, "discount": 0, "tax_rate": 0.18}
+  ]
+}
 ```
 
-Requiere módulo `pos` habilitado y permiso `pos.access`.
+### GET /invoices?status=DRAFT
+### GET /invoices/{id}
+
+### POST /invoices/{id}/issue
+Emite la factura, asigna `invoice_number` y encola PDF.
+
+### POST /invoices/{id}/void
+Body:
+```json
+{"reason": "Error en datos"}
+```
+
+### GET /invoices/{id}/pdf
+Respuesta si listo:
+```json
+{
+  "ok": true,
+  "data": {
+    "status": "READY",
+    "document_id": 10,
+    "url": "/api/v1/invoices/1/pdf?stream=1"
+  },
+  "meta": {"request_id": "...", "ts": "..."}
+}
+```
+
+### POST /invoices/{id}/send-email
+Body:
+```json
+{"to": "cliente@email.com"}
+```
+
+## Templates
+
+### POST /invoice-templates
+### PUT /invoice-templates/{id}
+### GET /invoice-templates/{id}
+### GET /invoice-templates
+### POST /invoice-templates/{id}/set-default
+
+`config` es JSON libre para plantilla 8.5x11.
+
+## Recurring (si modules.recurring.enabled)
+
+### POST /recurring-rules
+### GET /recurring-rules
+### POST /recurring-rules/{id}/pause
+### POST /recurring-rules/{id}/resume

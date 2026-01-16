@@ -79,6 +79,16 @@ function seedDev(): void
             'users.manage',
             'roles.manage',
             'audit.read',
+            'customers.read',
+            'customers.write',
+            'items.read',
+            'items.write',
+            'invoices.read',
+            'invoices.write',
+            'invoices.issue',
+            'invoices.void',
+            'templates.manage',
+            'recurring.manage',
         ]);
         upsertRolePermissions($db, $tenantId, $roleId, $permissionIds);
         $userId = upsertAdminUser($db, $tenantId);
