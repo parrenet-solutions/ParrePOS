@@ -13,10 +13,16 @@ class UserRepository
         $this->db = $db;
     }
 
-    public function findByEmail(string $email): ?array
+    public function findByEmailAndTenantSlug(string $email, string $tenantSlug): ?array
     {
-        $stmt = $this->db->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
-        $stmt->execute([$email]);
+        $stmt = $this->db->prepare(
+            'SELECT users.*, tenants.slug AS tenant_slug, tenants.status AS tenant_status
+             FROM users
+             INNER JOIN tenants ON tenants.id = users.tenant_id
+             WHERE users.email = ? AND tenants.slug = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$email, $tenantSlug]);
         $row = $stmt->fetch();
 
         return $row ?: null;

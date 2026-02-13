@@ -96,3 +96,4 @@ Middleware obligatorios:
 ## 8) Wave actual
 - Wave 0: Fundaciones (auth, RBAC, tenant_settings, audit, base API, colas base)
 - Wave 1: Facturación 8.5x11 (clientes, items, invoices, templates, pdf job, envío email job)
+- Wave 2: POS + Offline-First (PWA + Ticket + Caja + Sync por eventos).

@@ -1,96 +1,243 @@
 ### Health
-GET http://parrepos.local/health
+GET http://localhost/health
 
 ### Login
-POST http://parrepos.local/api/v1/auth/login
+POST http://localhost/api/v1/auth/login
 Content-Type: application/json
 
 {
+  "tenant_slug": "demo",
   "email": "admin@demo.local",
   "password": "Admin12345!"
 }
 
-### Refresh
-POST http://parrepos.local/api/v1/auth/refresh
-Content-Type: application/json
-
-{
-  "refresh_token": "{{refresh_token}}"
-}
-
 ### Me
-GET http://parrepos.local/api/v1/me
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQxMjgzLCJleHAiOjE3Njg1NDIxODMsImp0aSI6IjI1NjY2NGQxMDI1MjIwYjYyYjdmZDIxM2EyNzFmYTBjIn0.-ASuhMlBDmDvoXXL1L-_LML9JCtwjDAS9qhg3tx3cbs
+GET http://localhost/api/v1/me
+Authorization: Bearer {{access_token}}
 
-### Crear cliente
-POST http://parrepos.local/api/v1/customers
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+### POS: handshake
+POST http://localhost/api/v1/pos/registers/handshake
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
-  "name": "Cliente Demo",
-  "type": "PERSON",
-  "doc_number": "001-0000000-1",
-  "email": "cliente@demo.local",
-  "phone": "8090000000",
-  "status": "ACTIVE"
+  "device_id": "demo-device-1",
+  "app_version": "2.2.0",
+  "capabilities": ["offline", "sync"]
 }
 
-### Crear item
-POST http://parrepos.local/api/v1/items
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+### POS: crear sucursal
+POST http://localhost/api/v1/branches
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
-  "type": "SERVICE",
-  "name": "Servicio de ejemplo",
-  "price": 1000,
-  "itbis_rate": 0.18,
-  "status": "ACTIVE"
+  "name": "Sucursal Centro",
+  "address": "Av. Demo 123"
 }
 
-### Crear factura (draft)
-POST http://parrepos.local/api/v1/invoices
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQxMjgzLCJleHAiOjE3Njg1NDIxODMsImp0aSI6IjI1NjY2NGQxMDI1MjIwYjYyYjdmZDIxM2EyNzFmYTBjIn0.-ASuhMlBDmDvoXXL1L-_LML9JCtwjDAS9qhg3tx3cbs
+### POS: crear caja
+POST http://localhost/api/v1/pos/registers
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
-  "customer_id": 1,
+  "branch_id": 1,
+  "name": "Caja 1",
+  "device_id": "demo-device-1"
+}
+
+### POS: abrir caja
+POST http://localhost/api/v1/pos/cash-sessions/open
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "branch_id": 1,
+  "register_id": 1,
+  "opening_amount": 1000
+}
+
+### POS: salida de caja (gasto)
+POST http://localhost/api/v1/pos/cash-movements
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+X-Idempotency-Key: mov-001
+X-Device-Id: demo-device-1
+
+{
+  "cash_session_id": 1,
+  "type": "OUT",
+  "amount": 250,
+  "reason_code": "EXPENSE",
+  "description": "Compra de insumos",
+  "reference": "R-1001"
+}
+
+### POS: salida de caja duplicada (esperado: ok=true, data.duplicate=true)
+POST http://localhost/api/v1/pos/cash-movements
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+X-Idempotency-Key: mov-001
+X-Device-Id: demo-device-1
+
+{
+  "cash_session_id": 1,
+  "type": "OUT",
+  "amount": 250,
+  "reason_code": "EXPENSE",
+  "description": "Compra de insumos",
+  "reference": "R-1001"
+}
+
+### POS: entrada de caja (deposito)
+POST http://localhost/api/v1/pos/cash-movements
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "cash_session_id": 1,
+  "type": "IN",
+  "amount": 500,
+  "reason_code": "DEPOSIT",
+  "description": "Refuerzo de caja",
+  "reference": "D-2001"
+}
+
+### POS: resumen movimientos
+GET http://localhost/api/v1/pos/cash-movements/summary?cash_session_id=1
+Authorization: Bearer {{access_token}}
+
+### POS: reversar movimiento
+POST http://localhost/api/v1/pos/cash-movements/1/reverse
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "description": "Reverso por error"
+}
+
+### POS: venta pagada (mixta)
+POST http://localhost/api/v1/pos/sales
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "branch_id": 1,
+  "register_id": 1,
+  "cash_session_id": 1,
   "items": [
-    {"name": "Servicio de ejemplo", "qty": 1, "unit_price": 1000, "discount": 0, "tax_rate": 0.18}
+    {"name": "Cafe", "qty": 1, "unit_price": 1000, "discount": 0, "tax_rate": 0.18}
+  ],
+  "payments": [
+    {"method": "CASH", "amount": 1000},
+    {"method": "CARD", "amount": 180, "reference": "POS-001"}
   ]
 }
 
-### Emitir factura
-POST http://parrepos.local/api/v1/invoices/1/issue
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
-
-### Obtener PDF
-GET http://parrepos.local/api/v1/invoices/1/pdf
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
-
-### Enviar email
-POST http://parrepos.local/api/v1/invoices/1/send-email
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+### POS: venta HOLD
+POST http://localhost/api/v1/pos/sales/1/hold
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
-  "to": "cliente@demo.local"
+  "reason": "Cliente pidio pausa"
 }
 
-### Recurrente (si enabled)
-POST http://parrepos.local/api/v1/recurring-rules
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+### POS: venta RESUME
+POST http://localhost/api/v1/pos/sales/1/resume
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### POS: cerrar caja
+POST http://localhost/api/v1/pos/cash-sessions/1/close
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
-  "customer_id": 1,
-  "interval_days": 30,
-  "items": [
-    {"name": "Servicio recurrente", "qty": 1, "unit_price": 500, "discount": 0, "tax_rate": 0.18}
+  "closing_amount": 2180
+}
+
+### POS: sync status (permiso sync.read)
+GET http://localhost/api/v1/sync/status?device_id=demo-device-1
+Authorization: Bearer {{access_token}}
+
+### POS: sync offline (permiso sync.write)
+POST http://localhost/api/v1/sync/events
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "device_id": "demo-device-1",
+  "events": [
+    {
+      "event_id": "11111111-1111-1111-1111-111111111111",
+      "device_id": "demo-device-1",
+      "type": "pos.sale.paid",
+      "idempotency_key": "idem-001",
+      "payload": {
+        "branch_id": 1,
+        "register_id": 1,
+        "cash_session_id": 1,
+        "items": [
+          {"name": "Pan", "qty": 1, "unit_price": 100, "discount": 0, "tax_rate": 0.18}
+        ]
+      },
+      "ts": "2026-01-16T00:00:00Z"
+    }
   ]
 }
-### Recurrente (si enabled)
-GET http://parrepos.local/api/v1/customers
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsIpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzY4NTQwMzMwLCJleHAiOjE3Njg1NDEyMzAsImp0aSI6ImQ1NjU2ZTIwMmU2NTc5OGJlNDA3NGI1NGYxOGViMWJlIn0.c8UggTnvz4HuliSrNrHj4cRegtdPREi-4HDsP8VirpM
+
+### POS: sync offline duplicado (esperado status=duplicate por evento)
+POST http://localhost/api/v1/sync/events
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
+
+{
+  "device_id": "demo-device-1",
+  "events": [
+    {
+      "event_id": "11111111-1111-1111-1111-111111111111",
+      "device_id": "demo-device-1",
+      "type": "pos.sale.paid",
+      "idempotency_key": "idem-001",
+      "payload": {
+        "branch_id": 1,
+        "register_id": 1,
+        "cash_session_id": 1,
+        "items": [
+          {"name": "Pan", "qty": 1, "unit_price": 100, "discount": 0, "tax_rate": 0.18}
+        ]
+      },
+      "ts": "2026-01-16T00:00:00Z"
+    }
+  ]
+}
+
+### NEGATIVO (manual): esperar TENANT_SUSPENDED
+### 1) actualiza tenants.status='SUSPENDED' en DB
+### 2) ejecuta este handshake
+POST http://localhost/api/v1/pos/registers/handshake
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "device_id": "negative-device",
+  "app_version": "2.2.0",
+  "capabilities": ["offline", "sync"]
+}
+
+### NEGATIVO (manual): esperar MODULE_DISABLED
+### 1) actualiza tenant_settings.modules con pos.enabled=false
+### 2) ejecuta este handshake
+POST http://localhost/api/v1/pos/registers/handshake
+Authorization: Bearer {{eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhY2Nlc3MiLCJzdWIiOjEsInRlbmFudF9pZCI6MSwicm9sZXMiOlsiT1dORVIiXSwiaWF0IjoxNzcxMDIwMDU0LCJleHAiOjE3NzEwMjA5NTQsImp0aSI6ImE3NzkzZjc0YjllYmEzZmE3MGJmZDU4YWM0NTI5OGQ3In0.lg_fGlESQHahaE63I6UrWmKaA_pUB_mF8ZhmqNJ3iXc}}
+Content-Type: application/json
+
+{
+  "device_id": "negative-device",
+  "app_version": "2.2.0",
+  "capabilities": ["offline", "sync"]
+}

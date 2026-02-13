@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Bootstrap\Config;
 use App\Bootstrap\Env;
+use App\Core\Validation\Validator;
 use App\Documents\DocumentRepository;
 use App\Documents\DocumentService;
 use App\Documents\PdfService;
@@ -14,8 +15,6 @@ use App\Invoices\InvoiceService;
 use App\Jobs\JobQueue;
 use App\Recurring\RecurringRepository;
 use App\Shared\Helpers;
-//use PDO;
-//use Redis;
 
 require_once dirname(__DIR__) . '/app/Bootstrap/Env.php';
 require_once dirname(__DIR__) . '/app/Bootstrap/Config.php';
@@ -67,22 +66,50 @@ if ($redisHost && class_exists(Redis::class)) {
     }
 }
 
-$queue = new JobQueue($redis);
+$queue = new JobQueue($db, $redis);
 $documentRepository = new DocumentRepository($db);
 $invoiceRepository = new InvoiceRepository($db);
 $documentService = new DocumentService($documentRepository, $invoiceRepository, new PdfService());
 $emailRepository = new EmailRepository($db);
 $emailSender = new NullEmailSender();
-$invoiceService = new InvoiceService(new \App\Core\Validation\Validator());
+$invoiceService = new InvoiceService(new Validator());
 $recurringRepository = new RecurringRepository($db);
 
-if ($queue->isAvailable()) {
-    processQueue($queue, $documentService, $emailRepository, $emailSender, $recurringRepository, $invoiceRepository, $invoiceService, $db);
-} else {
-    processPending($documentRepository, $documentService, $emailRepository, $emailSender, $recurringRepository, $invoiceRepository, $invoiceService, $db);
-}
+enqueueLegacyPendingJobs($queue, $documentRepository, $emailRepository, $recurringRepository);
+processQueue($queue, $documentService, $emailRepository, $emailSender, $recurringRepository, $invoiceRepository, $invoiceService, $db);
 
 fwrite(STDOUT, "Worker finalizado.\n");
+
+function enqueueLegacyPendingJobs(
+    JobQueue $queue,
+    DocumentRepository $documentRepository,
+    EmailRepository $emailRepository,
+    RecurringRepository $recurringRepository
+): void {
+    foreach ($documentRepository->listPending() as $doc) {
+        $docId = (int) ($doc['id'] ?? 0);
+        if ($docId > 0) {
+            $queue->push('jobs:pdf', ['document_id' => $docId], 'pdf:document:' . $docId, 5);
+        }
+    }
+
+    foreach ($emailRepository->listPending() as $email) {
+        $emailId = (int) ($email['id'] ?? 0);
+        if ($emailId > 0) {
+            $queue->push('jobs:email', ['email_id' => $emailId], 'email:' . $emailId, 5);
+        }
+    }
+
+    foreach ($recurringRepository->listDue() as $rule) {
+        $ruleId = (int) ($rule['id'] ?? 0);
+        if ($ruleId <= 0) {
+            continue;
+        }
+
+        $schedule = (string) ($rule['next_run_at'] ?? 'na');
+        $queue->push('jobs:recurring', ['rule_id' => $ruleId], 'recurring:' . $ruleId . ':' . $schedule, 5);
+    }
+}
 
 function processQueue(
     JobQueue $queue,
@@ -94,60 +121,60 @@ function processQueue(
     InvoiceService $invoiceService,
     PDO $db
 ): void {
-    foreach ($recurringRepository->listDue() as $rule) {
-        $queue->push('jobs:recurring', ['rule_id' => (int) $rule['id']]);
-    }
-
     $loops = 0;
-    while ($loops < 200) {
+    while ($loops < 500) {
         $processed = false;
 
-        $job = $queue->pop('jobs:pdf');
-        if ($job && isset($job['document_id'])) {
-            $documentService->generateInvoicePdf((int) $job['document_id']);
-            $processed = true;
-        }
+        $processed = consumeJob($queue, 'jobs:pdf', function (array $payload) use ($documentService): void {
+            if (!isset($payload['document_id'])) {
+                throw new RuntimeException('document_id requerido');
+            }
+            $documentService->generateInvoicePdf((int) $payload['document_id']);
+        }) || $processed;
 
-        $job = $queue->pop('jobs:email');
-        if ($job && isset($job['email_id'])) {
-            processEmail($emailRepository, $emailSender, (int) $job['email_id']);
-            $processed = true;
-        }
+        $processed = consumeJob($queue, 'jobs:email', function (array $payload) use ($emailRepository, $emailSender): void {
+            if (!isset($payload['email_id'])) {
+                throw new RuntimeException('email_id requerido');
+            }
+            processEmail($emailRepository, $emailSender, (int) $payload['email_id']);
+        }) || $processed;
 
-        $job = $queue->pop('jobs:recurring');
-        if ($job && isset($job['rule_id'])) {
-            processRecurringRule($recurringRepository, $invoiceRepository, $invoiceService, $db, (int) $job['rule_id']);
-            $processed = true;
-        }
+        $processed = consumeJob($queue, 'jobs:recurring', function (array $payload) use ($recurringRepository, $invoiceRepository, $invoiceService, $db): void {
+            if (!isset($payload['rule_id'])) {
+                throw new RuntimeException('rule_id requerido');
+            }
+            processRecurringRule($recurringRepository, $invoiceRepository, $invoiceService, $db, (int) $payload['rule_id']);
+        }) || $processed;
 
         if (!$processed) {
             break;
         }
+
         $loops++;
     }
 }
 
-function processPending(
-    DocumentRepository $documentRepository,
-    DocumentService $documentService,
-    EmailRepository $emailRepository,
-    NullEmailSender $emailSender,
-    RecurringRepository $recurringRepository,
-    InvoiceRepository $invoiceRepository,
-    InvoiceService $invoiceService,
-    PDO $db
-): void {
-    foreach ($documentRepository->listPending() as $doc) {
-        $documentService->generateInvoicePdf((int) $doc['id']);
+function consumeJob(JobQueue $queue, string $queueName, callable $handler): bool
+{
+    $job = $queue->popJob($queueName);
+    if ($job === null) {
+        return false;
     }
 
-    foreach ($emailRepository->listPending() as $email) {
-        processEmail($emailRepository, $emailSender, (int) $email['id']);
+    $jobId = (int) ($job['id'] ?? 0);
+    $attempt = (int) ($job['attempt'] ?? 0);
+
+    try {
+        $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
+        $handler($payload);
+        $queue->complete($jobId);
+        fwrite(STDOUT, '[OK] ' . $queueName . ' job_id=' . $jobId . ' intento=' . $attempt . "\n");
+    } catch (Throwable $e) {
+        $queue->fail($jobId, $e->getMessage());
+        fwrite(STDOUT, '[FAIL] ' . $queueName . ' job_id=' . $jobId . ' error=' . $e->getMessage() . "\n");
     }
 
-    foreach ($recurringRepository->listDue() as $rule) {
-        processRecurringRule($recurringRepository, $invoiceRepository, $invoiceService, $db, (int) $rule['id']);
-    }
+    return true;
 }
 
 function processEmail(EmailRepository $emailRepository, NullEmailSender $sender, int $emailId): void
@@ -159,6 +186,8 @@ function processEmail(EmailRepository $emailRepository, NullEmailSender $sender,
 
     if ($sender->send($email['email_to'], $email['subject'], $email['body'])) {
         $emailRepository->markSent($emailId);
+    } else {
+        throw new RuntimeException('Fallo envio email');
     }
 }
 
@@ -183,14 +212,14 @@ function processRecurringRule(
 
     $items = json_decode($rule['items_json'], true);
     if (!is_array($items)) {
-        return;
+        throw new RuntimeException('items_json invalido');
     }
 
     $payload = ['customer_id' => (int) $rule['customer_id'], 'items' => $items];
     $validated = $invoiceService->validateCreate($payload);
     $totals = $invoiceService->totals($validated['items']);
 
-    Helpers::transaction($db, function () use ($invoiceRepository, $rule, $totals, $validated) {
+    Helpers::transaction($db, function () use ($invoiceRepository, $rule, $totals, $validated): void {
         $invoiceId = $invoiceRepository->createDraft((int) $rule['tenant_id'], [
             'customer_id' => (int) $rule['customer_id'],
             'subtotal' => $totals['subtotal'],

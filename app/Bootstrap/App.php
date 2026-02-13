@@ -29,11 +29,32 @@ use App\Jobs\JobQueue;
 use App\Invoices\InvoiceController;
 use App\Invoices\InvoiceRepository;
 use App\Invoices\InvoiceService;
+use App\Pos\BranchController;
+use App\Pos\BranchRepository;
+use App\Pos\BranchService;
+use App\Pos\CashSessionController;
+use App\Pos\CashSessionRepository;
+use App\Pos\CashSessionService;
+use App\Pos\CashMovementController;
+use App\Pos\CashMovementRepository;
+use App\Pos\CashMovementService;
+use App\Pos\InventoryMovementRepository;
+use App\Pos\PosSaleController;
+use App\Pos\PosSaleRepository;
+use App\Pos\PosSaleService;
+use App\Pos\PosPaymentRepository;
+use App\Pos\RegisterHandshakeService;
+use App\Pos\RegisterController;
+use App\Pos\RegisterRepository;
+use App\Pos\RegisterService;
 use App\RBAC\AuthorizationMiddleware;
 use App\RBAC\RoleRepository;
 use App\Recurring\RecurringController;
 use App\Recurring\RecurringRepository;
 use App\Recurring\RecurringService;
+use App\Sync\SyncController;
+use App\Sync\SyncRepository;
+use App\Sync\SyncStatusRepository;
 use App\Templates\TemplateController;
 use App\Templates\TemplateRepository;
 use App\Templates\TemplateService;
@@ -132,7 +153,7 @@ class App
         ));
         $container->set(EmailRepository::class, fn (Container $c) => new EmailRepository($c->get('db')));
         $container->set(PdfService::class, fn () => new PdfService());
-        $container->set(JobQueue::class, fn (Container $c) => new JobQueue($c->get('redis')));
+        $container->set(JobQueue::class, fn (Container $c) => new JobQueue($c->get('db'), $c->get('redis')));
         $container->set(InvoiceController::class, fn (Container $c) => new InvoiceController(
             $c->get(InvoiceRepository::class),
             $c->get(InvoiceService::class),
@@ -143,6 +164,74 @@ class App
             $c->get(JobQueue::class),
             $c->get(AuditLogger::class),
             $c->get('db')
+        ));
+        $container->set(BranchRepository::class, fn (Container $c) => new BranchRepository($c->get('db')));
+        $container->set(BranchService::class, fn (Container $c) => new BranchService($c->get(Validator::class)));
+        $container->set(BranchController::class, fn (Container $c) => new BranchController(
+            $c->get(BranchRepository::class),
+            $c->get(BranchService::class),
+            $c->get(AuditLogger::class)
+        ));
+        $container->set(RegisterRepository::class, fn (Container $c) => new RegisterRepository($c->get('db')));
+        $container->set(RegisterService::class, fn (Container $c) => new RegisterService($c->get(Validator::class)));
+        $container->set(RegisterHandshakeService::class, fn (Container $c) => new RegisterHandshakeService(
+            $c->get(TenantSettingsRepository::class)
+        ));
+        $container->set(RegisterController::class, fn (Container $c) => new RegisterController(
+            $c->get(RegisterRepository::class),
+            $c->get(RegisterService::class),
+            $c->get(BranchRepository::class),
+            $c->get(AuditLogger::class),
+            $c->get(TenantSettingsRepository::class),
+            $c->get(RegisterHandshakeService::class),
+            $c->get(RateLimiter::class)
+        ));
+        $container->set(CashSessionRepository::class, fn (Container $c) => new CashSessionRepository($c->get('db')));
+        $container->set(CashSessionService::class, fn () => new CashSessionService());
+        $container->set(PosSaleRepository::class, fn (Container $c) => new PosSaleRepository($c->get('db')));
+        $container->set(PosPaymentRepository::class, fn (Container $c) => new PosPaymentRepository($c->get('db')));
+        $container->set(PosSaleService::class, fn () => new PosSaleService());
+        $container->set(InventoryMovementRepository::class, fn (Container $c) => new InventoryMovementRepository($c->get('db')));
+        $container->set(CashMovementRepository::class, fn (Container $c) => new CashMovementRepository($c->get('db')));
+        $container->set(CashMovementService::class, fn () => new CashMovementService());
+        $container->set(CashSessionController::class, fn (Container $c) => new CashSessionController(
+            $c->get(CashSessionRepository::class),
+            $c->get(CashSessionService::class),
+            $c->get(RegisterRepository::class),
+            $c->get(BranchRepository::class),
+            $c->get(PosPaymentRepository::class),
+            $c->get(PosSaleRepository::class),
+            $c->get(CashMovementRepository::class),
+            $c->get(AuditLogger::class)
+        ));
+        $container->set(CashMovementController::class, fn (Container $c) => new CashMovementController(
+            $c->get(CashMovementRepository::class),
+            $c->get(CashMovementService::class),
+            $c->get(CashSessionRepository::class),
+            $c->get(SyncRepository::class),
+            $c->get(AuditLogger::class)
+        ));
+        $container->set(PosSaleController::class, fn (Container $c) => new PosSaleController(
+            $c->get(PosSaleRepository::class),
+            $c->get(PosSaleService::class),
+            $c->get(CashSessionRepository::class),
+            $c->get(BranchRepository::class),
+            $c->get(RegisterRepository::class),
+            $c->get(InventoryMovementRepository::class),
+            $c->get(TenantSettingsRepository::class),
+            $c->get(PosPaymentRepository::class),
+            $c->get(AuditLogger::class),
+            $c->get('db')
+        ));
+        $container->set(SyncRepository::class, fn (Container $c) => new SyncRepository($c->get('db')));
+        $container->set(SyncStatusRepository::class, fn (Container $c) => new SyncStatusRepository($c->get('db')));
+        $container->set(SyncController::class, fn (Container $c) => new SyncController(
+            $c->get(SyncRepository::class),
+            $c->get(PosSaleController::class),
+            $c->get(CashMovementController::class),
+            $c->get(RateLimiter::class),
+            $c->get(AuditLogger::class),
+            $c->get(SyncStatusRepository::class)
         ));
         $container->set(RecurringRepository::class, fn (Container $c) => new RecurringRepository($c->get('db')));
         $container->set(RecurringService::class, fn (Container $c) => new RecurringService($c->get(Validator::class)));
@@ -200,6 +289,12 @@ class App
         $invoiceController = $this->container->get(InvoiceController::class);
         $templateController = $this->container->get(TemplateController::class);
         $recurringController = $this->container->get(RecurringController::class);
+        $branchController = $this->container->get(BranchController::class);
+        $registerController = $this->container->get(RegisterController::class);
+        $cashSessionController = $this->container->get(CashSessionController::class);
+        $posSaleController = $this->container->get(PosSaleController::class);
+        $cashMovementController = $this->container->get(CashMovementController::class);
+        $syncController = $this->container->get(SyncController::class);
 
         $router->get('/health', function (): array {
             return ['status' => 200, 'data' => ['status' => 'ok']];
@@ -316,6 +411,151 @@ class App
             $authMiddleware,
             $invoicingGuard,
             new AuthorizationMiddleware('templates.manage'),
+        ]);
+
+        $posGuard = $tenantGuard->requireModule('pos');
+        $posAccess = new AuthorizationMiddleware('pos.access');
+        $router->post('/api/v1/branches', [$branchController, 'create'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('branches.manage'),
+        ]);
+        $router->put('/api/v1/branches/{id}', [$branchController, 'update'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('branches.manage'),
+        ]);
+        $router->get('/api/v1/branches/{id}', [$branchController, 'get'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('branches.manage'),
+        ]);
+        $router->get('/api/v1/branches', [$branchController, 'list'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('branches.manage'),
+        ]);
+
+        $router->post('/api/v1/pos/registers', [$registerController, 'create'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.registers.manage'),
+        ]);
+        $router->post('/api/v1/pos/registers/handshake', [$registerController, 'handshake'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+        ]);
+        $router->put('/api/v1/pos/registers/{id}', [$registerController, 'update'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.registers.manage'),
+        ]);
+        $router->get('/api/v1/pos/registers/{id}', [$registerController, 'get'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.registers.manage'),
+        ]);
+        $router->get('/api/v1/pos/registers', [$registerController, 'list'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.registers.manage'),
+        ]);
+
+        $router->post('/api/v1/pos/cash-sessions/open', [$cashSessionController, 'open'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.cash.open'),
+        ]);
+        $router->post('/api/v1/pos/cash-sessions/{id}/close', [$cashSessionController, 'close'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.cash.close'),
+        ]);
+
+        $router->post('/api/v1/pos/cash-movements', [$cashMovementController, 'create'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.cash.adjust'),
+        ]);
+        $router->get('/api/v1/pos/cash-movements', [$cashMovementController, 'list'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.cash.movements.read'),
+        ]);
+        $router->get('/api/v1/pos/cash-movements/summary', [$cashMovementController, 'summary'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.cash.movements.read'),
+        ]);
+        $router->post('/api/v1/pos/cash-movements/{id}/reverse', [$cashMovementController, 'reverse'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.cash.movements.reverse'),
+        ]);
+
+        $router->post('/api/v1/pos/sales', [$posSaleController, 'create'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.sales.pay'),
+        ]);
+        $router->post('/api/v1/pos/sales/{id}/void', [$posSaleController, 'void'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.sales.void'),
+        ]);
+        $router->post('/api/v1/pos/sales/{id}/hold', [$posSaleController, 'hold'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.sales.write'),
+        ]);
+        $router->post('/api/v1/pos/sales/{id}/resume', [$posSaleController, 'resume'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.sales.write'),
+        ]);
+        $router->get('/api/v1/pos/sales/{id}', [$posSaleController, 'get'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.sales.read'),
+        ]);
+        $router->get('/api/v1/pos/sales', [$posSaleController, 'list'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('pos.sales.read'),
+        ]);
+
+        $router->post('/api/v1/sync/events', [$syncController, 'ingest'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('sync.write'),
+        ]);
+        $router->get('/api/v1/sync/status', [$syncController, 'status'], [
+            $authMiddleware,
+            $posGuard,
+            $posAccess,
+            new AuthorizationMiddleware('sync.read'),
         ]);
 
         $recurringGuard = $tenantGuard->requireModule('recurring');

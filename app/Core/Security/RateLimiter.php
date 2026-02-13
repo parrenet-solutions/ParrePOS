@@ -26,4 +26,18 @@ class RateLimiter
 
         return $current > $limit;
     }
+
+    public function allowOnce(string $key, int $ttlSeconds): bool
+    {
+        if ($this->redis === null) {
+            return true;
+        }
+
+        $set = $this->redis->setnx($key, '1');
+        if ($set) {
+            $this->redis->expire($key, $ttlSeconds);
+        }
+
+        return (bool) $set;
+    }
 }

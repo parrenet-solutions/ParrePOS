@@ -47,9 +47,10 @@ class AuthController
 
         $email = trim((string) ($payload['email'] ?? ''));
         $password = (string) ($payload['password'] ?? '');
+        $tenantSlug = trim((string) ($payload['tenant_slug'] ?? ''));
 
-        if ($email === '' || $password === '') {
-            throw new HttpException(422, 'VALIDATION_ERROR', 'Email y password requeridos');
+        if ($email === '' || $password === '' || $tenantSlug === '') {
+            throw new HttpException(422, 'VALIDATION_ERROR', 'tenant_slug, email y password requeridos');
         }
 
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
@@ -57,10 +58,17 @@ class AuthController
             throw new HttpException(429, 'RATE_LIMIT', 'Demasiados intentos');
         }
 
-        $user = $this->userRepository->findByEmail($email);
+        $user = $this->userRepository->findByEmailAndTenantSlug($email, $tenantSlug);
         if (!$user || !$this->userService->verifyPassword($password, $user['password_hash'])) {
-            $this->auditLogger->log((int) ($user['tenant_id'] ?? 0), (int) ($user['id'] ?? 0), 'auth.login_failed', ['email' => $email]);
+            $this->auditLogger->log((int) ($user['tenant_id'] ?? 0), (int) ($user['id'] ?? 0), 'auth.login_failed', [
+                'tenant_slug' => $tenantSlug,
+                'email' => $email,
+            ]);
             throw new HttpException(401, 'UNAUTHORIZED', 'Credenciales inválidas');
+        }
+
+        if (($user['tenant_status'] ?? 'ACTIVE') !== 'ACTIVE') {
+            throw new HttpException(403, 'TENANT_SUSPENDED', 'Tenant suspendido');
         }
 
         if (($user['status'] ?? 'ACTIVE') !== 'ACTIVE') {

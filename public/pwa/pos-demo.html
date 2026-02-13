@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ParrePos POS Demo</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <style>
+    body { font-family: "Trebuchet MS", sans-serif; background:#f3f1ea; color:#2b2b2b; margin:0; }
+    header { padding:16px 20px; background:#2b2b2b; color:#f3f1ea; }
+    main { padding:20px; max-width:720px; margin:0 auto; }
+    .card { background:#fff; padding:16px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.08); margin-bottom:16px; }
+    label { display:block; margin-bottom:6px; font-weight:600; }
+    input, textarea { width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; margin-bottom:12px; }
+    button { padding:10px 16px; border:none; border-radius:6px; background:#2b2b2b; color:#f3f1ea; cursor:pointer; }
+    .row { display:flex; gap:12px; }
+    .row > div { flex:1; }
+    .status { font-size:14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>POS Demo Offline</h1>
+  </header>
+  <main>
+    <div class="card">
+      <h2>Estado</h2>
+      <p class="status" id="net-status">Verificando...</p>
+      <p class="status">Device ID: <span id="device-id"></span></p>
+    </div>
+
+    <div class="card">
+      <h2>Crear venta local</h2>
+      <div class="row">
+        <div>
+          <label>Branch ID</label>
+          <input id="branch-id" value="1">
+        </div>
+        <div>
+          <label>Register ID</label>
+          <input id="register-id" value="1">
+        </div>
+      </div>
+      <label>Cash Session ID</label>
+      <input id="cash-session-id" value="1">
+      <label>Item JSON</label>
+      <textarea id="items" rows="4">[{"name":"Cafe","qty":1,"unit_price":150,"discount":0,"tax_rate":0.18}]</textarea>
+      <button id="btn-add">Guardar en outbox</button>
+      <p class="status" id="outbox-status"></p>
+    </div>
+
+    <div class="card">
+      <h2>Sincronizar</h2>
+      <label>Access Token (Bearer)</label>
+      <input id="access-token" placeholder="Pega tu access_token">
+      <button id="btn-sync">Enviar eventos</button>
+      <p class="status" id="sync-status"></p>
+    </div>
+  </main>
+
+  <script src="/pwa/pos-demo.js"></script>
+</body>
+</html>

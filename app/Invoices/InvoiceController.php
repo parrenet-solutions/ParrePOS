@@ -133,7 +133,7 @@ class InvoiceController
 
         $docId = $this->documentRepository->createInvoicePdf($tenantId, $id, 'PENDING');
         if ($this->queue->isAvailable()) {
-            $this->queue->push('jobs:pdf', ['document_id' => $docId]);
+            $this->queue->push('jobs:pdf', ['document_id' => $docId], 'pdf:document:' . $docId, 5);
         } else {
             $this->documentService->generateInvoicePdf($docId);
         }
@@ -235,7 +235,7 @@ class InvoiceController
 
         $emailId = $this->emailRepository->create($tenantId, $to, $subject, $body);
         if ($this->queue->isAvailable()) {
-            $this->queue->push('jobs:email', ['email_id' => $emailId]);
+            $this->queue->push('jobs:email', ['email_id' => $emailId], 'email:' . $emailId, 5);
         }
 
         return ['status' => 200, 'data' => ['email_id' => $emailId, 'status' => 'PENDING']];
