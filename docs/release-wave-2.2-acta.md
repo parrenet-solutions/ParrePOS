@@ -2,7 +2,7 @@
 
 **Fecha:** `2026-02-13`  
 **Ambiente:** `local`  
-**Commit:** `PENDIENTE_AL_CREAR_COMMIT`  
+**Commit:** `78dc28b`  
 **Responsable:** `Equipo POS SaaS`
 
 ## 1. Migraciones
