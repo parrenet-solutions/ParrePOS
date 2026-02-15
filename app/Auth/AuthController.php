@@ -54,7 +54,13 @@ class AuthController
         }
 
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-        if ($this->rateLimiter->tooManyAttempts('login:' . $ip, 10, 60)) {
+        if ($this->rateLimiter->tooManyAttempts('login:ip:' . $ip, 10, 60)) {
+            throw new HttpException(429, 'RATE_LIMIT', 'Demasiados intentos');
+        }
+        if ($this->rateLimiter->tooManyAttempts('login:tenant:' . $tenantSlug . ':ip:' . $ip, 12, 60)) {
+            throw new HttpException(429, 'RATE_LIMIT', 'Demasiados intentos');
+        }
+        if ($this->rateLimiter->tooManyAttempts('login:tenant:' . $tenantSlug . ':email:' . strtolower($email), 6, 60)) {
             throw new HttpException(429, 'RATE_LIMIT', 'Demasiados intentos');
         }
 
@@ -113,6 +119,14 @@ class AuthController
         if ($refreshToken === '') {
             throw new HttpException(422, 'VALIDATION_ERROR', 'refresh_token requerido');
         }
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $tokenFingerprint = substr(hash('sha256', $refreshToken), 0, 16);
+        if ($this->rateLimiter->tooManyAttempts('refresh:ip:' . $ip, 30, 60)) {
+            throw new HttpException(429, 'RATE_LIMIT', 'Demasiadas solicitudes de refresh');
+        }
+        if ($this->rateLimiter->tooManyAttempts('refresh:token:' . $tokenFingerprint, 15, 60)) {
+            throw new HttpException(429, 'RATE_LIMIT', 'Demasiadas solicitudes de refresh');
+        }
 
         $decoded = $this->jwtService->decodeRefresh($refreshToken);
         $tokenHash = hash('sha256', $refreshToken);
@@ -155,6 +169,11 @@ class AuthController
     {
         $payload = $request->getJson();
         $refreshToken = is_array($payload) ? (string) ($payload['refresh_token'] ?? '') : '';
+
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        if ($this->rateLimiter->tooManyAttempts('logout:ip:' . $ip, 60, 60)) {
+            throw new HttpException(429, 'RATE_LIMIT', 'Demasiadas solicitudes de logout');
+        }
 
         if ($refreshToken !== '') {
             $tokenHash = hash('sha256', $refreshToken);

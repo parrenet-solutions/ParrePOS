@@ -49,6 +49,7 @@ class PosSaleService
             $taxAmount = $lineSubtotal * $taxRate;
 
             $items[] = [
+                'item_id' => isset($item['item_id']) ? (int) $item['item_id'] : null,
                 'name' => trim((string) $item['name']),
                 'qty' => $qty,
                 'unit_price' => $unitPrice,

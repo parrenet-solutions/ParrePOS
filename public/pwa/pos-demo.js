@@ -40,6 +40,7 @@ if ('serviceWorker' in navigator) {
 
 const DB_NAME = 'parrepos-pos';
 const STORE = 'outbox';
+const MAX_RETRIES = 3;
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -95,9 +96,14 @@ document.getElementById('btn-add').addEventListener('click', async () => {
 
     const event = {
       event_id: uuid(),
+      op_id: 'op-' + uuid(),
       device_id: deviceId,
       type: 'pos.sale.paid',
       idempotency_key: uuid(),
+      status: 'PENDING',
+      retries: 0,
+      last_error: null,
+      last_attempt_at: null,
       payload: {
         branch_id: branchId,
         register_id: registerId,
@@ -121,13 +127,21 @@ document.getElementById('btn-sync').addEventListener('click', async () => {
     return;
   }
 
-  const events = await listOutbox();
+  const outbox = await listOutbox();
+  const events = outbox.filter(e => (e.status || 'PENDING') !== 'CONFLICT' && (e.retries || 0) < MAX_RETRIES);
   if (events.length === 0) {
     syncStatus.textContent = 'Outbox vacío.';
     return;
   }
 
   try {
+    const now = new Date().toISOString();
+    for (const ev of events) {
+      ev.status = 'SYNCING';
+      ev.last_attempt_at = now;
+      await addToOutbox(ev);
+    }
+
     const response = await fetch('/api/v1/sync/events', {
       method: 'POST',
       headers: {
@@ -146,12 +160,40 @@ document.getElementById('btn-sync').addEventListener('click', async () => {
       return;
     }
 
-    const appliedIds = (data.data?.results || [])
-      .filter(item => item.status === 'applied' || item.status === 'duplicate')
-      .map(item => item.event_id);
+    const results = data.data?.results || [];
+    const byId = new Map(results.map(r => [r.event_id, r]));
+    const removeIds = [];
+    let conflicts = 0;
+    let failed = 0;
 
-    await clearOutbox(appliedIds);
-    syncStatus.textContent = 'Sync completado. Procesados: ' + appliedIds.length;
+    for (const ev of events) {
+      const res = byId.get(ev.event_id);
+      if (!res) {
+        continue;
+      }
+
+      if (res.status === 'applied' || res.status === 'duplicate') {
+        removeIds.push(ev.event_id);
+        continue;
+      }
+
+      if (res.status === 'conflict') {
+        ev.status = 'CONFLICT';
+        ev.last_error = res.error || 'conflict';
+        await addToOutbox(ev);
+        conflicts++;
+        continue;
+      }
+
+      ev.status = 'FAILED';
+      ev.retries = (ev.retries || 0) + 1;
+      ev.last_error = res.error || 'failed';
+      await addToOutbox(ev);
+      failed++;
+    }
+
+    await clearOutbox(removeIds);
+    syncStatus.textContent = 'Sync completado. ok=' + removeIds.length + ', conflict=' + conflicts + ', failed=' + failed;
   } catch (err) {
     syncStatus.textContent = 'Error de sync: ' + err.message;
   }

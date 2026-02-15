@@ -4,16 +4,19 @@ namespace App\Tenancy;
 
 use App\Core\Middleware\MiddlewareInterface;
 use App\Core\Request;
+use App\Plans\PlanService;
 use App\Settings\TenantSettingsRepository;
 use App\Shared\Exceptions\HttpException;
 
 class FiscalGuardMiddleware implements MiddlewareInterface
 {
     private TenantSettingsRepository $settingsRepository;
+    private PlanService $planService;
 
-    public function __construct(TenantSettingsRepository $settingsRepository)
+    public function __construct(TenantSettingsRepository $settingsRepository, PlanService $planService)
     {
         $this->settingsRepository = $settingsRepository;
+        $this->planService = $planService;
     }
 
     public function handle(Request $request, callable $next): array
@@ -29,7 +32,10 @@ class FiscalGuardMiddleware implements MiddlewareInterface
         }
 
         $modules = $this->settingsRepository->getModules($tenantId);
-        if (!in_array('fiscal', $modules, true)) {
+        $planModules = $this->planService->getAllowedModules($tenantId);
+        $moduleAllowedByPlan = $planModules === [] || in_array('fiscal', $planModules, true);
+
+        if (!in_array('fiscal', $modules, true) || !$moduleAllowedByPlan) {
             throw new HttpException(403, 'MODULE_DISABLED', 'Módulo fiscal no habilitado');
         }
 

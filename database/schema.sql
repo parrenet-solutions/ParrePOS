@@ -96,6 +96,33 @@ CREATE TABLE IF NOT EXISTS tenant_settings (
     CONSTRAINT fk_tenant_settings_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS plans (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    modules_json JSON NOT NULL,
+    limits_json JSON NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL,
+    UNIQUE KEY uniq_plans_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    plan_id BIGINT UNSIGNED NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    starts_at DATETIME NULL,
+    ends_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL,
+    UNIQUE KEY uniq_tenant_subscriptions_tenant (tenant_id),
+    KEY idx_tenant_subscriptions_plan (plan_id),
+    CONSTRAINT fk_tenant_subscriptions_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+    CONSTRAINT fk_tenant_subscriptions_plan FOREIGN KEY (plan_id) REFERENCES plans(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id BIGINT UNSIGNED NOT NULL,
@@ -410,6 +437,7 @@ CREATE TABLE IF NOT EXISTS pos_sale_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id BIGINT UNSIGNED NOT NULL,
     sale_id BIGINT UNSIGNED NOT NULL,
+    item_id BIGINT UNSIGNED NULL,
     name VARCHAR(150) NOT NULL,
     qty DECIMAL(12,2) NOT NULL,
     unit_price DECIMAL(12,2) NOT NULL,
@@ -420,8 +448,10 @@ CREATE TABLE IF NOT EXISTS pos_sale_items (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_pos_sale_items_tenant (tenant_id),
     KEY idx_pos_sale_items_sale (tenant_id, sale_id),
+    KEY idx_pos_sale_items_item (tenant_id, item_id),
     CONSTRAINT fk_pos_sale_items_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-    CONSTRAINT fk_pos_sale_items_sale FOREIGN KEY (sale_id) REFERENCES pos_sales(id)
+    CONSTRAINT fk_pos_sale_items_sale FOREIGN KEY (sale_id) REFERENCES pos_sales(id),
+    CONSTRAINT fk_pos_sale_items_item FOREIGN KEY (item_id) REFERENCES catalog_items(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS pos_payments (
@@ -465,16 +495,40 @@ CREATE TABLE IF NOT EXISTS sync_events (
     tenant_id BIGINT UNSIGNED NOT NULL,
     device_id VARCHAR(100) NOT NULL,
     event_id VARCHAR(36) NOT NULL,
+    op_id VARCHAR(64) NULL,
     type VARCHAR(120) NOT NULL,
     idempotency_key VARCHAR(120) NOT NULL,
     payload_json JSON NOT NULL,
+    payload_hash CHAR(64) NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     error_message VARCHAR(255) NULL,
+    conflict_code VARCHAR(50) NULL,
     applied_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_sync_event (event_id),
     UNIQUE KEY uniq_sync_idempotency (tenant_id, device_id, idempotency_key),
+    KEY idx_sync_op (tenant_id, device_id, type, op_id),
     KEY idx_sync_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS sync_conflicts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    device_id VARCHAR(100) NOT NULL,
+    type VARCHAR(120) NOT NULL,
+    op_id VARCHAR(64) NOT NULL,
+    event_id VARCHAR(36) NOT NULL,
+    existing_event_id VARCHAR(36) NULL,
+    reason_code VARCHAR(50) NOT NULL,
+    payload_json JSON NOT NULL,
+    existing_payload_json JSON NULL,
+    resolved TINYINT(1) NOT NULL DEFAULT 0,
+    resolved_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_sync_conflicts_tenant (tenant_id),
+    KEY idx_sync_conflicts_device (tenant_id, device_id),
+    KEY idx_sync_conflicts_op (tenant_id, device_id, type, op_id),
+    CONSTRAINT fk_sync_conflicts_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS idempotency_keys (
@@ -490,11 +544,20 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 CREATE TABLE IF NOT EXISTS inventory_movements (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id BIGINT UNSIGNED NOT NULL,
-    sale_id BIGINT UNSIGNED NOT NULL,
+    branch_id BIGINT UNSIGNED NOT NULL,
+    item_id BIGINT UNSIGNED NOT NULL,
+    sale_id BIGINT UNSIGNED NULL,
     item_name VARCHAR(150) NOT NULL,
+    movement_type VARCHAR(10) NOT NULL,
     qty DECIMAL(12,2) NOT NULL,
+    reason_code VARCHAR(50) NULL,
+    reference_type VARCHAR(30) NULL,
+    reference_id BIGINT UNSIGNED NULL,
+    created_by BIGINT UNSIGNED NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_inventory_tenant (tenant_id),
+    KEY idx_inventory_branch_item (tenant_id, branch_id, item_id),
+    KEY idx_inventory_reference (tenant_id, reference_type, reference_id),
     CONSTRAINT fk_inventory_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

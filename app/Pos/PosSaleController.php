@@ -4,6 +4,7 @@ namespace App\Pos;
 
 use App\Audit\AuditLogger;
 use App\Core\Request;
+use App\Inventory\InventoryService;
 use App\Settings\TenantSettingsRepository;
 use App\Shared\Exceptions\HttpException;
 use App\Shared\Helpers;
@@ -16,7 +17,7 @@ class PosSaleController
     private CashSessionRepository $cashSessionRepository;
     private BranchRepository $branchRepository;
     private RegisterRepository $registerRepository;
-    private InventoryMovementRepository $inventoryRepository;
+    private InventoryService $inventoryService;
     private TenantSettingsRepository $settingsRepository;
     private PosPaymentRepository $paymentRepository;
     private AuditLogger $audit;
@@ -28,7 +29,7 @@ class PosSaleController
         CashSessionRepository $cashSessionRepository,
         BranchRepository $branchRepository,
         RegisterRepository $registerRepository,
-        InventoryMovementRepository $inventoryRepository,
+        InventoryService $inventoryService,
         TenantSettingsRepository $settingsRepository,
         PosPaymentRepository $paymentRepository,
         AuditLogger $audit,
@@ -39,7 +40,7 @@ class PosSaleController
         $this->cashSessionRepository = $cashSessionRepository;
         $this->branchRepository = $branchRepository;
         $this->registerRepository = $registerRepository;
-        $this->inventoryRepository = $inventoryRepository;
+        $this->inventoryService = $inventoryService;
         $this->settingsRepository = $settingsRepository;
         $this->paymentRepository = $paymentRepository;
         $this->audit = $audit;
@@ -83,7 +84,21 @@ class PosSaleController
         $payments = $this->service->normalizePayments($payload, $totals['total']);
         $paidTotal = $payments['paid_total'];
 
-        $saleId = Helpers::transaction($this->db, function () use ($tenantId, $data, $totals, $paidTotal, $payments) {
+        $modules = $this->settingsRepository->getModules($tenantId);
+        $inventoryEnabled = in_array('inventory', $modules, true);
+        if ($inventoryEnabled) {
+            $this->inventoryService->assertSaleStockAvailable($tenantId, $data['branch_id'], $data['items']);
+        }
+
+        $saleId = Helpers::transaction($this->db, function () use (
+            $tenantId,
+            $userId,
+            $data,
+            $totals,
+            $paidTotal,
+            $payments,
+            $inventoryEnabled
+        ) {
             $sequence = $this->repository->nextTicketNumber($tenantId, $data['branch_id'], $data['register_id']);
             $ticketNumber = $this->service->formatTicket($data['branch_id'], $data['register_id'], $sequence);
 
@@ -106,13 +121,18 @@ class PosSaleController
                 'sale_id' => $id,
             ], $payments['items']);
 
+            if ($inventoryEnabled) {
+                $this->inventoryService->createSaleOutMovements(
+                    $tenantId,
+                    $data['branch_id'],
+                    $id,
+                    $userId,
+                    $data['items']
+                );
+            }
+
             return $id;
         });
-
-        $modules = $this->settingsRepository->getModules($tenantId);
-        if (in_array('inventory', $modules, true)) {
-            $this->inventoryRepository->createFromSale($tenantId, $saleId, $data['items']);
-        }
 
         $this->audit->log($tenantId, $userId, 'pos.sales.paid', ['sale_id' => $saleId]);
 
@@ -144,7 +164,16 @@ class PosSaleController
             throw new HttpException(409, 'INVALID_STATE', 'Venta no está pagada');
         }
 
-        $this->repository->void($tenantId, $id, $reason);
+        $modules = $this->settingsRepository->getModules($tenantId);
+        $inventoryEnabled = in_array('inventory', $modules, true);
+
+        Helpers::transaction($this->db, function () use ($tenantId, $id, $reason, $userId, $inventoryEnabled): void {
+            $this->repository->void($tenantId, $id, $reason);
+
+            if ($inventoryEnabled) {
+                $this->inventoryService->reverseSaleMovementsOnVoid($tenantId, $id, $userId);
+            }
+        });
         $this->audit->log($tenantId, $userId, 'pos.sales.void', ['sale_id' => $id]);
 
         return ['status' => 200, 'data' => ['id' => $id, 'status' => 'VOID']];

@@ -1,3 +1,9 @@
+### ParrePOS Requests - Cobertura por waves
+# Wave 1: auth/me, customers/items/invoices (ver docs/api.md para contrato completo)
+# Wave 2 (incluye 2.1/2.2): POS, caja, cash movements, sync, handshake/status
+# Wave 3-4: fiscal opcional, documentos, retries, metricas, webhook
+# Wave 5: ops metrics/conflicts, inventario integrado y hardening smoke
+
 ### Health
 GET http://localhost/health
 
@@ -233,13 +239,34 @@ Content-Type: application/json
   "register_id": 1,
   "cash_session_id": 1,
   "items": [
-    {"name": "Cafe", "qty": 1, "unit_price": 1000, "discount": 0, "tax_rate": 0.18}
+    {"item_id": 1, "name": "Cafe", "qty": 1, "unit_price": 1000, "discount": 0, "tax_rate": 0.18}
   ],
   "payments": [
     {"method": "CASH", "amount": 1000},
     {"method": "CARD", "amount": 180, "reference": "POS-001"}
   ]
 }
+
+### Inventory: movimiento manual IN
+POST http://localhost/api/v1/inventory/movements
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "branch_id": 1,
+  "item_id": 1,
+  "movement_type": "IN",
+  "qty": 20,
+  "reason_code": "ADJUST"
+}
+
+### Inventory: stock por sucursal/item
+GET http://localhost/api/v1/inventory/stock?branch_id=1&item_id=1
+Authorization: Bearer {{access_token}}
+
+### Inventory: kardex
+GET http://localhost/api/v1/inventory/kardex?branch_id=1&item_id=1&limit=50
+Authorization: Bearer {{access_token}}
 
 ### POS: venta HOLD
 POST http://localhost/api/v1/pos/sales/1/hold
@@ -270,6 +297,14 @@ Content-Type: application/json
 GET http://localhost/api/v1/sync/status?device_id=demo-device-1
 Authorization: Bearer {{access_token}}
 
+### OPS: métricas tenant (permiso audit.read)
+GET http://localhost/api/v1/ops/tenant-metrics
+Authorization: Bearer {{access_token}}
+
+### OPS: conflictos de sync (permiso audit.read)
+GET http://localhost/api/v1/ops/sync-conflicts?resolved=0&limit=50
+Authorization: Bearer {{access_token}}
+
 ### POS: sync offline (permiso sync.write)
 POST http://localhost/api/v1/sync/events
 Authorization: Bearer {{access_token}}
@@ -280,6 +315,7 @@ Content-Type: application/json
   "events": [
     {
       "event_id": "11111111-1111-1111-1111-111111111111",
+      "op_id": "op-001",
       "device_id": "demo-device-1",
       "type": "pos.sale.paid",
       "idempotency_key": "idem-001",
@@ -306,6 +342,7 @@ Content-Type: application/json
   "events": [
     {
       "event_id": "11111111-1111-1111-1111-111111111111",
+      "op_id": "op-001",
       "device_id": "demo-device-1",
       "type": "pos.sale.paid",
       "idempotency_key": "idem-001",
@@ -318,6 +355,60 @@ Content-Type: application/json
         ]
       },
       "ts": "2026-01-16T00:00:00Z"
+    }
+  ]
+}
+
+### POS: sync conflicto por op_id (esperado status=conflict)
+POST http://localhost/api/v1/sync/events
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "device_id": "demo-device-1",
+  "events": [
+    {
+      "event_id": "22222222-2222-2222-2222-222222222222",
+      "op_id": "op-conflict-001",
+      "device_id": "demo-device-1",
+      "type": "cash_movement.created",
+      "idempotency_key": "idem-conflict-a",
+      "payload": {
+        "cash_session_id": 1,
+        "type": "IN",
+        "amount": 10,
+        "reason_code": "DEPOSIT",
+        "description": "A",
+        "reference": "OP-A"
+      },
+      "ts": "2026-01-16T00:00:00Z"
+    }
+  ]
+}
+
+### POS: sync conflicto por op_id (segundo evento payload distinto)
+POST http://localhost/api/v1/sync/events
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "device_id": "demo-device-1",
+  "events": [
+    {
+      "event_id": "33333333-3333-3333-3333-333333333333",
+      "op_id": "op-conflict-001",
+      "device_id": "demo-device-1",
+      "type": "cash_movement.created",
+      "idempotency_key": "idem-conflict-b",
+      "payload": {
+        "cash_session_id": 1,
+        "type": "IN",
+        "amount": 99,
+        "reason_code": "DEPOSIT",
+        "description": "B",
+        "reference": "OP-B"
+      },
+      "ts": "2026-01-16T00:00:01Z"
     }
   ]
 }

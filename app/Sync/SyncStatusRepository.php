@@ -24,6 +24,10 @@ class SyncStatusRepository
             $failedStmt->execute([$tenantId, $deviceId, 'FAILED']);
             $failed = (int) ($failedStmt->fetch()['cnt'] ?? 0);
 
+            $conflictStmt = $this->db->prepare('SELECT COUNT(*) as cnt FROM sync_events WHERE tenant_id = ? AND device_id = ? AND status = ?');
+            $conflictStmt->execute([$tenantId, $deviceId, 'CONFLICT']);
+            $conflicts = (int) ($conflictStmt->fetch()['cnt'] ?? 0);
+
             $lastAppliedStmt = $this->db->prepare('SELECT MAX(applied_at) as last_applied FROM sync_events WHERE tenant_id = ? AND device_id = ? AND status = ?');
             $lastAppliedStmt->execute([$tenantId, $deviceId, 'APPLIED']);
             $lastApplied = $lastAppliedStmt->fetch()['last_applied'] ?? null;
@@ -38,6 +42,7 @@ class SyncStatusRepository
         return [
             'pending_count' => $pending,
             'failed_count' => $failed,
+            'conflict_count' => $conflicts,
             'last_applied_at' => $lastApplied,
             'last_event_at' => $lastEvent,
         ];
@@ -48,6 +53,7 @@ class SyncStatusRepository
         return [
             'pending_count' => 0,
             'failed_count' => 0,
+            'conflict_count' => 0,
             'last_applied_at' => null,
             'last_event_at' => null,
         ];

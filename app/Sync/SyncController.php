@@ -47,8 +47,12 @@ class SyncController
         $deviceId = trim((string) ($payload['device_id'] ?? ''));
         $eventsCount = count($payload['events']);
 
-        $rateKey = 'sync:' . ($deviceId !== '' ? $deviceId : ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-        if ($this->rateLimiter->tooManyAttempts($rateKey, 60, 60)) {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        if ($this->rateLimiter->tooManyAttempts('sync:ip:' . $ip, 180, 60)) {
+            throw new HttpException(429, 'RATE_LIMIT', 'Demasiadas solicitudes');
+        }
+        $rateKey = 'sync:tenant:' . $tenantId . ':device:' . ($deviceId !== '' ? $deviceId : 'unknown');
+        if ($this->rateLimiter->tooManyAttempts($rateKey, 120, 60)) {
             throw new HttpException(429, 'RATE_LIMIT', 'Demasiadas solicitudes');
         }
 
@@ -66,6 +70,10 @@ class SyncController
         foreach ($responses as $response) {
             $status = (string) ($response['status'] ?? 'failed');
             if (!isset($summary[$status])) {
+                if ($status === 'conflict') {
+                    $summary['conflict'] = ($summary['conflict'] ?? 0) + 1;
+                    continue;
+                }
                 $status = 'failed';
             }
             $summary[$status]++;
@@ -88,8 +96,12 @@ class SyncController
             throw new HttpException(422, 'VALIDATION_ERROR', 'device_id requerido');
         }
 
-        $rateKey = 'sync-status:' . $deviceId;
-        if ($this->rateLimiter->tooManyAttempts($rateKey, 30, 60)) {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        if ($this->rateLimiter->tooManyAttempts('sync-status:ip:' . $ip, 120, 60)) {
+            throw new HttpException(429, 'RATE_LIMIT', 'Demasiadas solicitudes');
+        }
+        $rateKey = 'sync-status:tenant:' . $tenantId . ':device:' . $deviceId;
+        if ($this->rateLimiter->tooManyAttempts($rateKey, 60, 60)) {
             throw new HttpException(429, 'RATE_LIMIT', 'Demasiadas solicitudes');
         }
 
@@ -105,6 +117,7 @@ class SyncController
         $eventId = (string) ($event['event_id'] ?? '');
         $deviceId = (string) ($event['device_id'] ?? '');
         $type = (string) ($event['type'] ?? '');
+        $opId = isset($event['op_id']) ? trim((string) $event['op_id']) : '';
         $idempotencyKey = (string) ($event['idempotency_key'] ?? '');
         $payload = $event['payload'] ?? null;
 
@@ -114,6 +127,52 @@ class SyncController
                 'error' => 'Campos requeridos faltantes',
             ]);
             return ['status' => 'failed', 'error' => 'Campos requeridos faltantes'];
+        }
+
+        if ($opId !== '') {
+            $existingOperation = $this->repository->findByOperation($tenantId, $deviceId, $type, $opId);
+            if (is_array($existingOperation)) {
+                $incomingPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
+                $incomingHash = $incomingPayload !== false ? hash('sha256', $incomingPayload) : '';
+                $existingHash = (string) ($existingOperation['payload_hash'] ?? '');
+
+                if ($existingHash !== '' && $existingHash !== $incomingHash) {
+                    $this->repository->createConflict($tenantId, [
+                        'device_id' => $deviceId,
+                        'type' => $type,
+                        'op_id' => $opId,
+                        'event_id' => $eventId,
+                        'existing_event_id' => (string) ($existingOperation['event_id'] ?? ''),
+                        'reason_code' => 'PAYLOAD_MISMATCH',
+                        'payload_json' => $payload,
+                        'existing_payload_json' => json_decode((string) ($existingOperation['payload_json'] ?? '{}'), true),
+                    ]);
+
+                    $this->repository->createEvent($tenantId, [
+                        'device_id' => $deviceId,
+                        'event_id' => $eventId,
+                        'op_id' => $opId,
+                        'type' => $type,
+                        'idempotency_key' => $idempotencyKey,
+                        'payload' => $payload,
+                        'conflict_code' => 'PAYLOAD_MISMATCH',
+                    ], 'CONFLICT', 'Conflicto detectado por op_id con payload distinto');
+
+                    $this->audit->log($tenantId, $userId, 'sync.conflict', [
+                        'event_id' => $eventId,
+                        'device_id' => $deviceId,
+                        'type' => $type,
+                        'op_id' => $opId,
+                        'reason_code' => 'PAYLOAD_MISMATCH',
+                    ]);
+
+                    return [
+                        'event_id' => $eventId,
+                        'status' => 'conflict',
+                        'error' => 'Conflicto detectado por op_id',
+                    ];
+                }
+            }
         }
 
         if ($this->repository->existsIdempotency($tenantId, $deviceId, $idempotencyKey)) {
@@ -158,6 +217,7 @@ class SyncController
         $eventIdRecord = $this->repository->createEvent($tenantId, [
             'device_id' => $deviceId,
             'event_id' => $eventId,
+            'op_id' => $opId,
             'type' => $type,
             'idempotency_key' => $idempotencyKey,
             'payload' => $payload,

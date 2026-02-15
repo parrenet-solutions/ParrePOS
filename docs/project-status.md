@@ -69,11 +69,11 @@ Fecha de corte: `2026-02-15`
 
 ## Etapas siguientes (resumen)
 
-### Post Wave 4
-- Baseline congelada con tag: `wave-4-baseline`.
+### Post Wave 5
+- Baseline congelada con tag: `wave-5-baseline`.
 - Wave 5 cerrada funcional y documentalmente.
 - Mantener fiscal opcional por tenant como política de producto.
-- Roadmap oficial siguiente etapa: `docs/roadmap-wave-5-6.md`.
+- Roadmap oficial siguiente etapa: `docs/project-roadmap.md`.
 
 ## Nota de producto
 - La facturación fiscal **no es obligatoria** en el sistema.

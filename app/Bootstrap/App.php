@@ -30,7 +30,12 @@ use App\Fiscal\FiscalController;
 use App\Fiscal\FiscalProviderFactory;
 use App\Fiscal\FiscalRepository;
 use App\Fiscal\FiscalService;
+use App\Inventory\InventoryController;
+use App\Inventory\InventoryRepository;
+use App\Inventory\InventoryService;
 use App\Jobs\JobQueue;
+use App\Ops\OpsController;
+use App\Ops\OpsRepository;
 use App\Invoices\InvoiceController;
 use App\Invoices\InvoiceRepository;
 use App\Invoices\InvoiceService;
@@ -43,7 +48,6 @@ use App\Pos\CashSessionService;
 use App\Pos\CashMovementController;
 use App\Pos\CashMovementRepository;
 use App\Pos\CashMovementService;
-use App\Pos\InventoryMovementRepository;
 use App\Pos\PosSaleController;
 use App\Pos\PosSaleRepository;
 use App\Pos\PosSaleService;
@@ -52,6 +56,8 @@ use App\Pos\RegisterHandshakeService;
 use App\Pos\RegisterController;
 use App\Pos\RegisterRepository;
 use App\Pos\RegisterService;
+use App\Plans\PlanRepository;
+use App\Plans\PlanService;
 use App\RBAC\AuthorizationMiddleware;
 use App\RBAC\RoleRepository;
 use App\Recurring\RecurringController;
@@ -133,36 +139,41 @@ class App
             );
         });
 
-        $container->set(UserRepository::class, fn (Container $c) => new UserRepository($c->get('db')));
-        $container->set(UserController::class, fn (Container $c) => new UserController($c->get(UserRepository::class)));
-        $container->set(UserService::class, fn () => new UserService());
-        $container->set(Validator::class, fn () => new Validator());
-        $container->set(CustomerRepository::class, fn (Container $c) => new CustomerRepository($c->get('db')));
-        $container->set(CustomerService::class, fn (Container $c) => new CustomerService($c->get(Validator::class)));
-        $container->set(CustomerController::class, fn (Container $c) => new CustomerController(
+        $container->set(UserRepository::class, fn(Container $c) => new UserRepository($c->get('db')));
+        $container->set(PlanRepository::class, fn(Container $c) => new PlanRepository($c->get('db')));
+        $container->set(PlanService::class, fn(Container $c) => new PlanService($c->get(PlanRepository::class)));
+        $container->set(UserController::class, fn(Container $c) => new UserController(
+            $c->get(UserRepository::class),
+            $c->get(PlanService::class)
+        ));
+        $container->set(UserService::class, fn() => new UserService());
+        $container->set(Validator::class, fn() => new Validator());
+        $container->set(CustomerRepository::class, fn(Container $c) => new CustomerRepository($c->get('db')));
+        $container->set(CustomerService::class, fn(Container $c) => new CustomerService($c->get(Validator::class)));
+        $container->set(CustomerController::class, fn(Container $c) => new CustomerController(
             $c->get(CustomerRepository::class),
             $c->get(CustomerService::class),
             $c->get(AuditLogger::class)
         ));
-        $container->set(ItemRepository::class, fn (Container $c) => new ItemRepository($c->get('db')));
-        $container->set(ItemService::class, fn (Container $c) => new ItemService($c->get(Validator::class)));
-        $container->set(ItemController::class, fn (Container $c) => new ItemController(
+        $container->set(ItemRepository::class, fn(Container $c) => new ItemRepository($c->get('db')));
+        $container->set(ItemService::class, fn(Container $c) => new ItemService($c->get(Validator::class)));
+        $container->set(ItemController::class, fn(Container $c) => new ItemController(
             $c->get(ItemRepository::class),
             $c->get(ItemService::class),
             $c->get(AuditLogger::class)
         ));
-        $container->set(InvoiceRepository::class, fn (Container $c) => new InvoiceRepository($c->get('db')));
-        $container->set(InvoiceService::class, fn (Container $c) => new InvoiceService($c->get(Validator::class)));
-        $container->set(DocumentRepository::class, fn (Container $c) => new DocumentRepository($c->get('db')));
-        $container->set(DocumentService::class, fn (Container $c) => new DocumentService(
+        $container->set(InvoiceRepository::class, fn(Container $c) => new InvoiceRepository($c->get('db')));
+        $container->set(InvoiceService::class, fn(Container $c) => new InvoiceService($c->get(Validator::class)));
+        $container->set(DocumentRepository::class, fn(Container $c) => new DocumentRepository($c->get('db')));
+        $container->set(DocumentService::class, fn(Container $c) => new DocumentService(
             $c->get(DocumentRepository::class),
             $c->get(InvoiceRepository::class),
             $c->get(PdfService::class)
         ));
-        $container->set(EmailRepository::class, fn (Container $c) => new EmailRepository($c->get('db')));
-        $container->set(PdfService::class, fn () => new PdfService());
-        $container->set(JobQueue::class, fn (Container $c) => new JobQueue($c->get('db'), $c->get('redis')));
-        $container->set(InvoiceController::class, fn (Container $c) => new InvoiceController(
+        $container->set(EmailRepository::class, fn(Container $c) => new EmailRepository($c->get('db')));
+        $container->set(PdfService::class, fn() => new PdfService());
+        $container->set(JobQueue::class, fn(Container $c) => new JobQueue($c->get('db'), $c->get('redis')));
+        $container->set(InvoiceController::class, fn(Container $c) => new InvoiceController(
             $c->get(InvoiceRepository::class),
             $c->get(InvoiceService::class),
             $c->get(CustomerRepository::class),
@@ -176,19 +187,19 @@ class App
             $c->get(TenantSettingsRepository::class),
             $c->get('db')
         ));
-        $container->set(BranchRepository::class, fn (Container $c) => new BranchRepository($c->get('db')));
-        $container->set(BranchService::class, fn (Container $c) => new BranchService($c->get(Validator::class)));
-        $container->set(BranchController::class, fn (Container $c) => new BranchController(
+        $container->set(BranchRepository::class, fn(Container $c) => new BranchRepository($c->get('db')));
+        $container->set(BranchService::class, fn(Container $c) => new BranchService($c->get(Validator::class)));
+        $container->set(BranchController::class, fn(Container $c) => new BranchController(
             $c->get(BranchRepository::class),
             $c->get(BranchService::class),
             $c->get(AuditLogger::class)
         ));
-        $container->set(RegisterRepository::class, fn (Container $c) => new RegisterRepository($c->get('db')));
-        $container->set(RegisterService::class, fn (Container $c) => new RegisterService($c->get(Validator::class)));
-        $container->set(RegisterHandshakeService::class, fn (Container $c) => new RegisterHandshakeService(
+        $container->set(RegisterRepository::class, fn(Container $c) => new RegisterRepository($c->get('db')));
+        $container->set(RegisterService::class, fn(Container $c) => new RegisterService($c->get(Validator::class)));
+        $container->set(RegisterHandshakeService::class, fn(Container $c) => new RegisterHandshakeService(
             $c->get(TenantSettingsRepository::class)
         ));
-        $container->set(RegisterController::class, fn (Container $c) => new RegisterController(
+        $container->set(RegisterController::class, fn(Container $c) => new RegisterController(
             $c->get(RegisterRepository::class),
             $c->get(RegisterService::class),
             $c->get(BranchRepository::class),
@@ -197,15 +208,25 @@ class App
             $c->get(RegisterHandshakeService::class),
             $c->get(RateLimiter::class)
         ));
-        $container->set(CashSessionRepository::class, fn (Container $c) => new CashSessionRepository($c->get('db')));
-        $container->set(CashSessionService::class, fn () => new CashSessionService());
-        $container->set(PosSaleRepository::class, fn (Container $c) => new PosSaleRepository($c->get('db')));
-        $container->set(PosPaymentRepository::class, fn (Container $c) => new PosPaymentRepository($c->get('db')));
-        $container->set(PosSaleService::class, fn () => new PosSaleService());
-        $container->set(InventoryMovementRepository::class, fn (Container $c) => new InventoryMovementRepository($c->get('db')));
-        $container->set(CashMovementRepository::class, fn (Container $c) => new CashMovementRepository($c->get('db')));
-        $container->set(CashMovementService::class, fn () => new CashMovementService());
-        $container->set(CashSessionController::class, fn (Container $c) => new CashSessionController(
+        $container->set(CashSessionRepository::class, fn(Container $c) => new CashSessionRepository($c->get('db')));
+        $container->set(CashSessionService::class, fn() => new CashSessionService());
+        $container->set(PosSaleRepository::class, fn(Container $c) => new PosSaleRepository($c->get('db')));
+        $container->set(PosPaymentRepository::class, fn(Container $c) => new PosPaymentRepository($c->get('db')));
+        $container->set(PosSaleService::class, fn() => new PosSaleService());
+        $container->set(InventoryRepository::class, fn(Container $c) => new InventoryRepository($c->get('db')));
+        $container->set(InventoryService::class, fn(Container $c) => new InventoryService(
+            $c->get(InventoryRepository::class),
+            $c->get(ItemRepository::class),
+            $c->get(BranchRepository::class)
+        ));
+        $container->set(InventoryController::class, fn(Container $c) => new InventoryController(
+            $c->get(InventoryRepository::class),
+            $c->get(InventoryService::class),
+            $c->get(AuditLogger::class)
+        ));
+        $container->set(CashMovementRepository::class, fn(Container $c) => new CashMovementRepository($c->get('db')));
+        $container->set(CashMovementService::class, fn() => new CashMovementService());
+        $container->set(CashSessionController::class, fn(Container $c) => new CashSessionController(
             $c->get(CashSessionRepository::class),
             $c->get(CashSessionService::class),
             $c->get(RegisterRepository::class),
@@ -215,28 +236,32 @@ class App
             $c->get(CashMovementRepository::class),
             $c->get(AuditLogger::class)
         ));
-        $container->set(CashMovementController::class, fn (Container $c) => new CashMovementController(
+        $container->set(CashMovementController::class, fn(Container $c) => new CashMovementController(
             $c->get(CashMovementRepository::class),
             $c->get(CashMovementService::class),
             $c->get(CashSessionRepository::class),
             $c->get(SyncRepository::class),
             $c->get(AuditLogger::class)
         ));
-        $container->set(PosSaleController::class, fn (Container $c) => new PosSaleController(
+        $container->set(PosSaleController::class, fn(Container $c) => new PosSaleController(
             $c->get(PosSaleRepository::class),
             $c->get(PosSaleService::class),
             $c->get(CashSessionRepository::class),
             $c->get(BranchRepository::class),
             $c->get(RegisterRepository::class),
-            $c->get(InventoryMovementRepository::class),
+            $c->get(InventoryService::class),
             $c->get(TenantSettingsRepository::class),
             $c->get(PosPaymentRepository::class),
             $c->get(AuditLogger::class),
             $c->get('db')
         ));
-        $container->set(SyncRepository::class, fn (Container $c) => new SyncRepository($c->get('db')));
-        $container->set(SyncStatusRepository::class, fn (Container $c) => new SyncStatusRepository($c->get('db')));
-        $container->set(SyncController::class, fn (Container $c) => new SyncController(
+        $container->set(SyncRepository::class, fn(Container $c) => new SyncRepository($c->get('db')));
+        $container->set(SyncStatusRepository::class, fn(Container $c) => new SyncStatusRepository($c->get('db')));
+        $container->set(OpsRepository::class, fn(Container $c) => new OpsRepository($c->get('db')));
+        $container->set(OpsController::class, fn(Container $c) => new OpsController(
+            $c->get(OpsRepository::class)
+        ));
+        $container->set(SyncController::class, fn(Container $c) => new SyncController(
             $c->get(SyncRepository::class),
             $c->get(PosSaleController::class),
             $c->get(CashMovementController::class),
@@ -244,36 +269,36 @@ class App
             $c->get(AuditLogger::class),
             $c->get(SyncStatusRepository::class)
         ));
-        $container->set(RecurringRepository::class, fn (Container $c) => new RecurringRepository($c->get('db')));
-        $container->set(RecurringService::class, fn (Container $c) => new RecurringService($c->get(Validator::class)));
-        $container->set(RecurringController::class, fn (Container $c) => new RecurringController(
+        $container->set(RecurringRepository::class, fn(Container $c) => new RecurringRepository($c->get('db')));
+        $container->set(RecurringService::class, fn(Container $c) => new RecurringService($c->get(Validator::class)));
+        $container->set(RecurringController::class, fn(Container $c) => new RecurringController(
             $c->get(RecurringRepository::class),
             $c->get(RecurringService::class),
             $c->get(AuditLogger::class)
         ));
-        $container->set(TemplateRepository::class, fn (Container $c) => new TemplateRepository($c->get('db')));
-        $container->set(TemplateService::class, fn (Container $c) => new TemplateService($c->get(Validator::class)));
-        $container->set(TemplateController::class, fn (Container $c) => new TemplateController(
+        $container->set(TemplateRepository::class, fn(Container $c) => new TemplateRepository($c->get('db')));
+        $container->set(TemplateService::class, fn(Container $c) => new TemplateService($c->get(Validator::class)));
+        $container->set(TemplateController::class, fn(Container $c) => new TemplateController(
             $c->get(TemplateRepository::class),
             $c->get(TemplateService::class),
             $c->get(AuditLogger::class)
         ));
-        $container->set(RefreshTokenRepository::class, fn (Container $c) => new RefreshTokenRepository($c->get('db')));
-        $container->set(RoleRepository::class, fn (Container $c) => new RoleRepository($c->get('db')));
-        $container->set(TenantSettingsRepository::class, fn (Container $c) => new TenantSettingsRepository($c->get('db')));
-        $container->set(TenantSettingsService::class, fn () => new TenantSettingsService());
-        $container->set(TenantSettingsValidator::class, fn () => new TenantSettingsValidator());
-        $container->set(FiscalRepository::class, fn (Container $c) => new FiscalRepository($c->get('db')));
-        $container->set(FiscalProviderFactory::class, fn () => new FiscalProviderFactory());
-        $container->set(FiscalAlertService::class, fn (Container $c) => new FiscalAlertService(
+        $container->set(RefreshTokenRepository::class, fn(Container $c) => new RefreshTokenRepository($c->get('db')));
+        $container->set(RoleRepository::class, fn(Container $c) => new RoleRepository($c->get('db')));
+        $container->set(TenantSettingsRepository::class, fn(Container $c) => new TenantSettingsRepository($c->get('db')));
+        $container->set(TenantSettingsService::class, fn() => new TenantSettingsService());
+        $container->set(TenantSettingsValidator::class, fn() => new TenantSettingsValidator());
+        $container->set(FiscalRepository::class, fn(Container $c) => new FiscalRepository($c->get('db')));
+        $container->set(FiscalProviderFactory::class, fn() => new FiscalProviderFactory());
+        $container->set(FiscalAlertService::class, fn(Container $c) => new FiscalAlertService(
             $c->get(EmailRepository::class),
             $c->get(JobQueue::class)
         ));
-        $container->set(FiscalService::class, fn (Container $c) => new FiscalService(
+        $container->set(FiscalService::class, fn(Container $c) => new FiscalService(
             $c->get(TenantSettingsService::class),
             $c->get(TenantSettingsValidator::class)
         ));
-        $container->set(FiscalController::class, fn (Container $c) => new FiscalController(
+        $container->set(FiscalController::class, fn(Container $c) => new FiscalController(
             $c->get(FiscalRepository::class),
             $c->get(FiscalService::class),
             $c->get(TenantSettingsRepository::class),
@@ -282,8 +307,8 @@ class App
             $c->get(RateLimiter::class),
             $c->get(FiscalAlertService::class)
         ));
-        $container->set(AuditRepository::class, fn (Container $c) => new AuditRepository($c->get('db')));
-        $container->set(AuditLogger::class, fn (Container $c) => new AuditLogger($c->get(AuditRepository::class)));
+        $container->set(AuditRepository::class, fn(Container $c) => new AuditRepository($c->get('db')));
+        $container->set(AuditLogger::class, fn(Container $c) => new AuditLogger($c->get(AuditRepository::class)));
 
         $container->set(AuthController::class, function (Container $c): AuthController {
             return new AuthController(
@@ -312,10 +337,12 @@ class App
         );
 
         $tenantGuard = new TenantGuardMiddleware(
-            $this->container->get(TenantSettingsRepository::class)
+            $this->container->get(TenantSettingsRepository::class),
+            $this->container->get(PlanService::class)
         );
         $fiscalGuard = new FiscalGuardMiddleware(
-            $this->container->get(TenantSettingsRepository::class)
+            $this->container->get(TenantSettingsRepository::class),
+            $this->container->get(PlanService::class)
         );
 
         $authController = $this->container->get(AuthController::class);
@@ -329,7 +356,9 @@ class App
         $cashSessionController = $this->container->get(CashSessionController::class);
         $posSaleController = $this->container->get(PosSaleController::class);
         $cashMovementController = $this->container->get(CashMovementController::class);
+        $inventoryController = $this->container->get(InventoryController::class);
         $syncController = $this->container->get(SyncController::class);
+        $opsController = $this->container->get(OpsController::class);
         $fiscalController = $this->container->get(FiscalController::class);
 
         $router->get('/health', function (): array {
@@ -345,10 +374,14 @@ class App
         $router->get('/api/v1/me', [$userController, 'me'], [$authMiddleware, $tenantGuard]);
 
         $invoicingGuard = $tenantGuard->requireModule('invoicing');
+        $customersLimitGuard = $tenantGuard->requireLimit('customers.max');
+        $itemsLimitGuard = $tenantGuard->requireLimit('items.max');
+        $invoicesLimitGuard = $tenantGuard->requireLimit('invoices.max');
 
         $router->post('/api/v1/customers', [$customerController, 'create'], [
             $authMiddleware,
             $invoicingGuard,
+            $customersLimitGuard,
             new AuthorizationMiddleware('customers.write'),
         ]);
         $router->put('/api/v1/customers/{id}', [$customerController, 'update'], [
@@ -370,6 +403,7 @@ class App
         $router->post('/api/v1/items', [$itemController, 'create'], [
             $authMiddleware,
             $invoicingGuard,
+            $itemsLimitGuard,
             new AuthorizationMiddleware('items.write'),
         ]);
         $router->put('/api/v1/items/{id}', [$itemController, 'update'], [
@@ -391,6 +425,7 @@ class App
         $router->post('/api/v1/invoices', [$invoiceController, 'create'], [
             $authMiddleware,
             $invoicingGuard,
+            $invoicesLimitGuard,
             new AuthorizationMiddleware('invoices.write'),
         ]);
         $router->get('/api/v1/invoices', [$invoiceController, 'list'], [
@@ -507,10 +542,14 @@ class App
         ]);
 
         $posGuard = $tenantGuard->requireModule('pos');
+        $inventoryGuard = $tenantGuard->requireModule('inventory');
+        $branchesLimitGuard = $tenantGuard->requireLimit('branches.max');
+        $registersLimitGuard = $tenantGuard->requireLimit('registers.max');
         $posAccess = new AuthorizationMiddleware('pos.access');
         $router->post('/api/v1/branches', [$branchController, 'create'], [
             $authMiddleware,
             $posGuard,
+            $branchesLimitGuard,
             $posAccess,
             new AuthorizationMiddleware('branches.manage'),
         ]);
@@ -536,6 +575,7 @@ class App
         $router->post('/api/v1/pos/registers', [$registerController, 'create'], [
             $authMiddleware,
             $posGuard,
+            $registersLimitGuard,
             $posAccess,
             new AuthorizationMiddleware('pos.registers.manage'),
         ]);
@@ -637,6 +677,21 @@ class App
             $posAccess,
             new AuthorizationMiddleware('pos.sales.read'),
         ]);
+        $router->post('/api/v1/inventory/movements', [$inventoryController, 'createMovement'], [
+            $authMiddleware,
+            $inventoryGuard,
+            new AuthorizationMiddleware('inventory.write'),
+        ]);
+        $router->get('/api/v1/inventory/stock', [$inventoryController, 'stock'], [
+            $authMiddleware,
+            $inventoryGuard,
+            new AuthorizationMiddleware('inventory.read'),
+        ]);
+        $router->get('/api/v1/inventory/kardex', [$inventoryController, 'kardex'], [
+            $authMiddleware,
+            $inventoryGuard,
+            new AuthorizationMiddleware('inventory.read'),
+        ]);
 
         $router->post('/api/v1/sync/events', [$syncController, 'ingest'], [
             $authMiddleware,
@@ -649,6 +704,16 @@ class App
             $posGuard,
             $posAccess,
             new AuthorizationMiddleware('sync.read'),
+        ]);
+        $router->get('/api/v1/ops/tenant-metrics', [$opsController, 'tenantMetrics'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('audit.read'),
+        ]);
+        $router->get('/api/v1/ops/sync-conflicts', [$opsController, 'syncConflicts'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('audit.read'),
         ]);
 
         $recurringGuard = $tenantGuard->requireModule('recurring');
@@ -695,6 +760,12 @@ class App
             Response::error($e->getErrorCode(), $e->getMessage(), $requestId, $e->getStatus(), $e->getDetails());
         } catch (Throwable $e) {
             $requestId = $request->getAttribute('request_id', $requestId);
+            $logFile = dirname(__DIR__, 2) . '/storage/logs/app-error.log';
+            $line = '[' . gmdate('c') . '] request_id=' . $requestId
+                . ' message=' . $e->getMessage()
+                . ' file=' . $e->getFile() . ':' . $e->getLine()
+                . PHP_EOL . $e->getTraceAsString() . PHP_EOL . PHP_EOL;
+            @file_put_contents($logFile, $line, FILE_APPEND);
             Response::error('SERVER_ERROR', 'Error interno', $requestId, 500);
         }
     }

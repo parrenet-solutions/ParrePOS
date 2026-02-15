@@ -7,6 +7,7 @@ use PDO;
 class PosSaleRepository
 {
     private PDO $db;
+    private ?bool $saleItemsHasItemId = null;
 
     public function __construct(PDO $db)
     {
@@ -37,12 +38,36 @@ class PosSaleRepository
 
     public function addItems(int $tenantId, int $saleId, array $items): void
     {
-        $stmt = $this->db->prepare(
-            'INSERT INTO pos_sale_items (tenant_id, sale_id, name, qty, unit_price, tax_rate, discount, line_total, tax_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        if ($this->hasSaleItemsItemIdColumn()) {
+            $stmt = $this->db->prepare(
+                'INSERT INTO pos_sale_items (tenant_id, sale_id, item_id, name, qty, unit_price, tax_rate, discount, line_total, tax_amount)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+
+            foreach ($items as $item) {
+                $stmt->execute([
+                    $tenantId,
+                    $saleId,
+                    $item['item_id'],
+                    $item['name'],
+                    $item['qty'],
+                    $item['unit_price'],
+                    $item['tax_rate'],
+                    $item['discount'],
+                    $item['line_total'],
+                    $item['tax_amount'],
+                ]);
+            }
+            return;
+        }
+
+        $legacy = $this->db->prepare(
+            'INSERT INTO pos_sale_items (tenant_id, sale_id, name, qty, unit_price, tax_rate, discount, line_total, tax_amount)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
 
         foreach ($items as $item) {
-            $stmt->execute([
+            $legacy->execute([
                 $tenantId,
                 $saleId,
                 $item['name'],
@@ -54,6 +79,24 @@ class PosSaleRepository
                 $item['tax_amount'],
             ]);
         }
+    }
+
+    private function hasSaleItemsItemIdColumn(): bool
+    {
+        if ($this->saleItemsHasItemId !== null) {
+            return $this->saleItemsHasItemId;
+        }
+
+        $stmt = $this->db->query(
+            "SELECT COUNT(*) AS cnt
+             FROM information_schema.columns
+             WHERE table_schema = DATABASE()
+               AND table_name = 'pos_sale_items'
+               AND column_name = 'item_id'"
+        );
+        $row = $stmt ? $stmt->fetch() : null;
+        $this->saleItemsHasItemId = ((int) ($row['cnt'] ?? 0) > 0);
+        return $this->saleItemsHasItemId;
     }
 
     public function findById(int $tenantId, int $id): ?array

@@ -128,7 +128,9 @@ function migrate(): void
             $executed++;
             fwrite(STDOUT, "[OK] {$name}\n");
         } catch (Throwable $e) {
-            $db->rollBack();
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
             throw $e;
         }
     }
@@ -239,6 +241,8 @@ function seedDev(): void
 
     try {
         $tenantId = upsertTenant($db);
+        $planId = upsertStarterPlan($db);
+        upsertTenantSubscription($db, $tenantId, $planId);
         upsertTenantSettings($db, $tenantId);
         $roleId = upsertRole($db, $tenantId, 'OWNER', 'Owner');
         $permissionIds = upsertPermissions($db, $tenantId, [
@@ -251,6 +255,8 @@ function seedDev(): void
             'customers.write',
             'items.read',
             'items.write',
+            'inventory.read',
+            'inventory.write',
             'invoices.read',
             'invoices.write',
             'invoices.issue',
@@ -312,7 +318,7 @@ function upsertTenantSettings(PDO $db, int $tenantId): void
         'modules' => [
             'invoicing' => ['enabled' => true],
             'pos' => ['enabled' => true],
-            'inventory' => ['enabled' => false],
+            'inventory' => ['enabled' => true],
             'recurring' => ['enabled' => true],
             'fiscal' => ['enabled' => false],
         ],
@@ -348,6 +354,53 @@ function upsertTenantSettings(PDO $db, int $tenantId): void
 
     $db->prepare('INSERT INTO tenant_settings (tenant_id, modules, created_at) VALUES (?, ?, NOW())')
         ->execute([$tenantId, json_encode($settings)]);
+}
+
+function upsertStarterPlan(PDO $db): int
+{
+    $code = 'STARTER';
+    $name = 'Starter';
+    $modules = ['invoicing', 'pos', 'inventory', 'recurring'];
+    $limits = [
+        'users.max' => 100,
+        'branches.max' => 200,
+        'registers.max' => 500,
+        'customers.max' => 100000,
+        'items.max' => 100000,
+        'invoices.max' => 200000,
+    ];
+
+    $stmt = $db->prepare('SELECT id FROM plans WHERE code = ? LIMIT 1');
+    $stmt->execute([$code]);
+    $row = $stmt->fetch();
+    if ($row) {
+        $db->prepare('UPDATE plans SET name = ?, modules_json = ?, limits_json = ?, status = ?, updated_at = NOW() WHERE id = ?')
+            ->execute([$name, json_encode($modules), json_encode($limits), 'ACTIVE', $row['id']]);
+        return (int) $row['id'];
+    }
+
+    $db->prepare(
+        'INSERT INTO plans (code, name, modules_json, limits_json, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())'
+    )->execute([$code, $name, json_encode($modules), json_encode($limits), 'ACTIVE']);
+
+    return (int) $db->lastInsertId();
+}
+
+function upsertTenantSubscription(PDO $db, int $tenantId, int $planId): void
+{
+    $stmt = $db->prepare('SELECT id FROM tenant_subscriptions WHERE tenant_id = ? LIMIT 1');
+    $stmt->execute([$tenantId]);
+    $row = $stmt->fetch();
+    if ($row) {
+        $db->prepare(
+            'UPDATE tenant_subscriptions SET plan_id = ?, status = ?, starts_at = COALESCE(starts_at, NOW()), updated_at = NOW() WHERE id = ?'
+        )->execute([$planId, 'ACTIVE', $row['id']]);
+        return;
+    }
+
+    $db->prepare(
+        'INSERT INTO tenant_subscriptions (tenant_id, plan_id, status, starts_at, created_at) VALUES (?, ?, ?, NOW(), NOW())'
+    )->execute([$tenantId, $planId, 'ACTIVE']);
 }
 
 function upsertRole(PDO $db, int $tenantId, string $code, string $name): int

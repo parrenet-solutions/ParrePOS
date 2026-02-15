@@ -1,4 +1,4 @@
-# API ParrePos (Wave 4)
+# API ParrePos (Wave 5)
 
 Base URL: `/api/v1`
 
@@ -84,8 +84,25 @@ Body opcional:
 Todos los endpoints de negocio requieren:
 - `Authorization: Bearer <access_token>`
 - Tenant activo (`TENANT_SUSPENDED` si no aplica)
-- Modulo habilitado por tenant (`MODULE_DISABLED` si no aplica)
+- Modulo habilitado por tenant/plan (`MODULE_DISABLED` si no aplica)
 - Permiso RBAC por endpoint (`FORBIDDEN` si falta)
+- Límite de plan por recurso cuando aplique (`PLAN_LIMIT_EXCEEDED`)
+
+Regla de límites por plan:
+- si la clave de límite no existe: se considera sin límite.
+- si la clave existe y vale `0`: recurso no permitido.
+
+## Sesión actual
+
+### Me
+`GET /me`
+
+Incluye metadatos de plan del tenant autenticado:
+- `plan.code`
+- `plan.name`
+- `plan.status`
+- `plan.modules`
+- `plan.limits`
 
 ## Permisos clave de Sync
 
@@ -321,7 +338,7 @@ Pago mixto ejemplo:
   "register_id": 1,
   "cash_session_id": 1,
   "items": [
-    {"name": "Cafe", "qty": 1, "unit_price": 1000, "discount": 0, "tax_rate": 0.18}
+    {"item_id": 1, "name": "Cafe", "qty": 1, "unit_price": 1000, "discount": 0, "tax_rate": 0.18}
   ],
   "payments": [
     {"method": "CASH", "amount": 1000},
@@ -329,6 +346,20 @@ Pago mixto ejemplo:
   ]
 }
 ```
+
+Nota inventario:
+- Si módulo `inventory` está habilitado, `item_id` es requerido por línea para descontar y revertir stock.
+
+## Inventory (Wave 5)
+
+Requiere módulo `inventory` habilitado + permisos:
+- `inventory.read`
+- `inventory.write`
+
+Endpoints:
+- `POST /inventory/movements` (manual `IN/OUT`)
+- `GET /inventory/stock?branch_id=1&item_id=1`
+- `GET /inventory/kardex?branch_id=1&item_id=1&date_from=2026-02-01&date_to=2026-02-28&limit=100`
 
 ## Sync
 
@@ -342,6 +373,7 @@ Body:
   "events": [
     {
       "event_id": "uuid",
+      "op_id": "op-uuid-opcional",
       "device_id": "demo-device-1",
       "type": "cash_movement.created",
       "idempotency_key": "idem-002",
@@ -361,7 +393,12 @@ Body:
 Resultados por evento en `data.results`:
 - `applied`
 - `duplicate`
+- `conflict`
 - `failed`
+
+Conflictos (`W5-006`):
+- Si llega el mismo `op_id` (por `device_id` + `type`) con payload distinto, el evento se marca `conflict`.
+- El conflicto no aplica side effects y se registra para soporte.
 
 ### Sync status
 `GET /sync/status?device_id=demo-device-1`
@@ -373,12 +410,27 @@ Respuesta ejemplo:
   "data": {
     "pending_count": 0,
     "failed_count": 0,
+    "conflict_count": 0,
     "last_applied_at": "2026-01-16 00:00:00",
     "last_event_at": "2026-01-16 00:00:00"
   },
   "meta": {"request_id": "...", "ts": "..."}
 }
 ```
+
+## Ops / Observabilidad (Wave 5)
+
+Requiere permiso `audit.read`.
+
+Endpoints:
+- `GET /ops/tenant-metrics`
+- `GET /ops/sync-conflicts?resolved=0&limit=50`
+
+`tenant-metrics` agrega KPIs de:
+- sync (`total_events`, `applied`, `failed`, `conflicts`)
+- conflictos (`total`, `open`, `resolved`)
+- jobs (`pending`, `retry`, `processing`, `failed`, `completed`, `dlq_total`)
+- fiscal (`total`, `accepted`, `rejected`, `failed`)
 
 ## Errores comunes
 

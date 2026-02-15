@@ -107,6 +107,28 @@ class TenantSettingsRepository
         return $merged;
     }
 
+    public function countForLimit(int $tenantId, string $limitKey): int
+    {
+        $sql = match ($limitKey) {
+            'users.max' => 'SELECT COUNT(*) AS cnt FROM users WHERE tenant_id = ?',
+            'branches.max' => 'SELECT COUNT(*) AS cnt FROM branches WHERE tenant_id = ?',
+            'registers.max' => 'SELECT COUNT(*) AS cnt FROM pos_registers WHERE tenant_id = ?',
+            'customers.max' => 'SELECT COUNT(*) AS cnt FROM customers WHERE tenant_id = ?',
+            'items.max' => 'SELECT COUNT(*) AS cnt FROM catalog_items WHERE tenant_id = ?',
+            'invoices.max' => 'SELECT COUNT(*) AS cnt FROM invoices WHERE tenant_id = ?',
+            default => null,
+        };
+
+        if ($sql === null) {
+            return 0;
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$tenantId]);
+        $row = $stmt->fetch();
+        return (int) ($row['cnt'] ?? 0);
+    }
+
     private function getSettings(int $tenantId): array
     {
         $stmt = $this->db->prepare('SELECT modules FROM tenant_settings WHERE tenant_id = ? LIMIT 1');

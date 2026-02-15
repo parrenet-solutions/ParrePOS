@@ -3,15 +3,18 @@
 namespace App\Users;
 
 use App\Core\Request;
+use App\Plans\PlanService;
 use App\Shared\Exceptions\HttpException;
 
 class UserController
 {
     private UserRepository $userRepository;
+    private PlanService $planService;
 
-    public function __construct(UserRepository $userRepository)
+    public function __construct(UserRepository $userRepository, PlanService $planService)
     {
         $this->userRepository = $userRepository;
+        $this->planService = $planService;
     }
 
     public function me(Request $request): array
@@ -34,6 +37,7 @@ class UserController
                 'user_id' => $userId,
                 'email' => $user['email'],
                 'tenant_id' => $tenantId,
+                'plan' => $this->planService->getTenantPlan($tenantId),
                 'roles' => (array) $request->getAttribute('roles', []),
                 'permissions' => (array) $request->getAttribute('permissions', []),
             ],
