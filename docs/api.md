@@ -1,4 +1,4 @@
-# API ParrePos (Wave 2.2)
+# API ParrePos (Wave 4)
 
 Base URL: `/api/v1`
 
@@ -91,6 +91,175 @@ Todos los endpoints de negocio requieren:
 
 - `POST /sync/events` requiere `sync.write`
 - `GET /sync/status` requiere `sync.read`
+
+## Fiscal (opcional por tenant)
+
+Regla:
+- Si `fiscal.enabled=false`, el sistema opera facturacion no fiscal.
+- Si `fiscal.enabled=true`, la emision de invoices genera `fiscal_documents` y cola de envio.
+- Para habilitar fiscal se exige `dgii_registered=true`.
+
+Permisos:
+- `GET /fiscal/status` requiere `fiscal.read`
+- `PUT /fiscal/config` requiere `fiscal.manage`
+- `GET /fiscal/documents` requiere `fiscal.read`
+- `POST /fiscal/documents/{id}/retry` requiere `fiscal.manage`
+
+### Fiscal status
+`GET /fiscal/status`
+
+Respuesta ejemplo:
+```json
+{
+  "ok": true,
+  "data": {
+    "fiscal": {
+      "enabled": false,
+      "dgii_registered": false,
+      "ncf_type": "B01",
+      "series": "B01"
+    },
+    "profile": null,
+    "sequence": {
+      "current": 0,
+      "next": 1
+    }
+  },
+  "meta": {"request_id": "...", "ts": "..."}
+}
+```
+
+### Actualizar config fiscal
+`PUT /fiscal/config`
+
+Body ejemplo:
+```json
+{
+  "fiscal": {
+    "enabled": true,
+    "dgii_registered": true,
+    "ncf_type": "B01",
+    "series": "B01",
+    "provider": "MOCK",
+    "provider_url": "",
+    "signing_secret": "tenant-secret-opcional",
+    "emission_limits": {
+      "daily_max": 0,
+      "monthly_max": 0
+    }
+  },
+  "profile": {
+    "legal_name": "Demo SRL",
+    "rnc": "131452987",
+    "environment": "CERT",
+    "status": "ACTIVE"
+  }
+}
+```
+
+### Listar documentos fiscales
+`GET /fiscal/documents?status=PENDING&limit=20`
+
+### Buscar documentos fiscales
+`GET /fiscal/documents/search?status=FAILED&ncf=B010000001&date_from=2026-02-01&date_to=2026-02-15&limit=50`
+
+### Resumen de documentos fiscales
+`GET /fiscal/documents/summary?date_from=2026-02-01&date_to=2026-02-15`
+
+### Métricas fiscales operativas
+`GET /fiscal/metrics?date_from=2026-02-01&date_to=2026-02-15`
+
+### Reintentar envio fiscal
+`POST /fiscal/documents/{id}/retry`
+
+### Reintento masivo fiscal
+`POST /fiscal/documents/retry-bulk`
+
+Body ejemplo:
+```json
+{
+  "ids": [10, 12, 15]
+}
+```
+
+### Obtener documento fiscal por id
+`GET /fiscal/documents/{id}`
+
+### Eventos de documento fiscal
+`GET /fiscal/documents/{id}/events?limit=100`
+
+### Acuses de documento fiscal
+`GET /fiscal/documents/{id}/acks?limit=50`
+
+### Webhook de acuse fiscal
+`POST /fiscal/webhook/ack`
+
+Headers:
+- `X-Fiscal-Webhook-Key: <key>`
+
+Body ejemplo:
+```json
+{
+  "tenant_id": 1,
+  "fiscal_document_id": 10,
+  "ack_code": "ACCEPTED",
+  "ack_message": "Aceptado por DGII",
+  "track_id": "DGII-ABC123"
+}
+```
+
+## Provider fiscal (Wave 4)
+
+- `MOCK` (default): no requiere integración externa.
+- `DGII`: usa endpoint externo (`fiscal.provider_url` o `FISCAL_DGII_URL`).
+- En envíos fiscales se genera:
+  - `request_hash` (SHA-256)
+  - `signature` HMAC SHA-256 con `fiscal.signing_secret` o `FISCAL_SIGNING_SECRET`
+
+## Estados fiscales (Wave 4)
+
+Estados principales de `fiscal_documents`:
+- `PENDING`: creado y pendiente de envío
+- `PROCESSING`: worker tomó el documento
+- `SENT`: request enviado al provider
+- `ACCEPTED`: aceptado por provider/DGII
+- `REJECTED`: rechazado por reglas de negocio/provider
+- `FAILED`: fallo técnico/procesamiento
+- `CANCELLED`: cancelado por anulación de factura mientras estaba en curso
+
+## Retry y DLQ fiscal (Wave 4)
+
+- Errores `RETRYABLE`: reintento automático con backoff exponencial en `jobs:fiscal-submit`.
+- Errores `NON_RETRYABLE`: pasan a `jobs_dlq` de inmediato.
+- Causa y trazabilidad quedan en `jobs_queue.last_error`, `jobs_dlq.last_error` y `fiscal_events`.
+
+## Validaciones fiscales RD (Wave 4)
+
+- NCF permitidos en emisión fiscal: `B01`, `B02`, `B14`, `B15`.
+- Para `B01` y `B14` se exige documento de cliente (RNC/Cédula).
+- Validación de documento:
+  - RNC: 9 dígitos (checksum básico)
+  - Cédula: 11 dígitos (checksum básico)
+- Límites de emisión opcionales por tenant:
+  - `fiscal.emission_limits.daily_max`
+  - `fiscal.emission_limits.monthly_max`
+- Si se excede límite: `409 FISCAL_LIMIT_EXCEEDED`.
+
+## Alertas fiscales (Wave 4)
+
+Cuando un documento queda en `FAILED` o `REJECTED`, se dispara alerta operativa:
+- email interno (si `FISCAL_ALERT_EMAILS` está configurado)
+- webhook interno opcional (`FISCAL_ALERT_WEBHOOK_URL`)
+
+## Backoffice Fiscal (Wave 4)
+
+- URL estática operativa: `/fiscal-backoffice.html`
+- Permite:
+  - listar/buscar documentos (`/fiscal/documents/search`)
+  - revisar eventos y acuses por documento
+  - reintentar individual (`/fiscal/documents/{id}/retry`)
+  - reintento masivo (`/fiscal/documents/retry-bulk`)
+  - visualizar KPIs (`/fiscal/metrics`)
 
 ## POS (requiere modulo `pos` habilitado)
 

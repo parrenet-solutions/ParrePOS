@@ -271,6 +271,8 @@ function seedDev(): void
             'branches.manage',
             'sync.read',
             'sync.write',
+            'fiscal.read',
+            'fiscal.manage',
         ]);
         upsertRolePermissions($db, $tenantId, $roleId, $permissionIds);
         $userId = upsertAdminUser($db, $tenantId);
@@ -312,6 +314,20 @@ function upsertTenantSettings(PDO $db, int $tenantId): void
             'pos' => ['enabled' => true],
             'inventory' => ['enabled' => false],
             'recurring' => ['enabled' => true],
+            'fiscal' => ['enabled' => false],
+        ],
+        'fiscal' => [
+            'enabled' => false,
+            'dgii_registered' => false,
+            'ncf_type' => 'B01',
+            'series' => 'B01',
+            'provider' => 'MOCK',
+            'provider_url' => '',
+            'signing_secret' => '',
+            'emission_limits' => [
+                'daily_max' => 0,
+                'monthly_max' => 0,
+            ],
         ],
         'security' => [
             'password_policy' => [

@@ -15,6 +15,112 @@ Content-Type: application/json
 GET http://localhost/api/v1/me
 Authorization: Bearer {{access_token}}
 
+### Fiscal: status
+GET http://localhost/api/v1/fiscal/status
+Authorization: Bearer {{access_token}}
+
+### Fiscal: config OFF (default no fiscal)
+PUT http://localhost/api/v1/fiscal/config
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "fiscal": {
+    "enabled": false,
+    "dgii_registered": false,
+    "ncf_type": "B01",
+    "series": "B01",
+    "provider": "MOCK",
+    "provider_url": "",
+    "signing_secret": ""
+  }
+}
+
+### Fiscal: config ON (requiere DGII true)
+PUT http://localhost/api/v1/fiscal/config
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "fiscal": {
+    "enabled": true,
+    "dgii_registered": true,
+    "ncf_type": "B01",
+    "series": "B01",
+    "provider": "MOCK",
+    "provider_url": "",
+    "signing_secret": "tenant-secret-demo",
+    "emission_limits": {
+      "daily_max": 0,
+      "monthly_max": 0
+    }
+  },
+  "profile": {
+    "legal_name": "Demo Fiscal SRL",
+    "rnc": "131452987",
+    "environment": "CERT",
+    "status": "ACTIVE"
+  }
+}
+
+### Fiscal: listar documentos
+GET http://localhost/api/v1/fiscal/documents?status=PENDING&limit=20
+Authorization: Bearer {{access_token}}
+
+### Fiscal: buscar documentos
+GET http://localhost/api/v1/fiscal/documents/search?status=FAILED&ncf=B01&date_from=2026-02-01&date_to=2026-02-28&limit=20
+Authorization: Bearer {{access_token}}
+
+### Fiscal: resumen documentos
+GET http://localhost/api/v1/fiscal/documents/summary?date_from=2026-02-01&date_to=2026-02-28
+Authorization: Bearer {{access_token}}
+
+### Fiscal: metricas operativas
+GET http://localhost/api/v1/fiscal/metrics?date_from=2026-02-01&date_to=2026-02-28
+Authorization: Bearer {{access_token}}
+
+### Fiscal: documento por id
+GET http://localhost/api/v1/fiscal/documents/1
+Authorization: Bearer {{access_token}}
+
+### Fiscal: eventos documento
+GET http://localhost/api/v1/fiscal/documents/1/events?limit=20
+Authorization: Bearer {{access_token}}
+
+### Fiscal: acks documento
+GET http://localhost/api/v1/fiscal/documents/1/acks?limit=20
+Authorization: Bearer {{access_token}}
+
+### Fiscal: retry documento 1
+POST http://localhost/api/v1/fiscal/documents/1/retry
+Authorization: Bearer {{access_token}}
+
+### Fiscal: retry bulk
+POST http://localhost/api/v1/fiscal/documents/retry-bulk
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "ids": [1, 2, 3]
+}
+
+### Fiscal: webhook ack (con key)
+POST http://localhost/api/v1/fiscal/webhook/ack
+Content-Type: application/json
+X-Fiscal-Webhook-Key: dev-fiscal-key
+
+{
+  "tenant_id": 1,
+  "fiscal_document_id": 1,
+  "ack_code": "ACCEPTED",
+  "ack_message": "Aceptado por DGII",
+  "track_id": "DGII-DEMO-001"
+}
+
+### Backoffice fiscal (URL manual)
+# Abrir en navegador:
+# http://localhost/fiscal-backoffice.html
+
 ### POS: handshake
 POST http://localhost/api/v1/pos/registers/handshake
 Authorization: Bearer {{access_token}}

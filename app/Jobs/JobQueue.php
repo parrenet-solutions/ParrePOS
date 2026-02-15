@@ -142,19 +142,26 @@ class JobQueue
 
         $attempts = (int) $job['attempts'];
         $maxAttempts = (int) $job['max_attempts'];
+        $queueName = (string) $job['queue_name'];
+        $nonRetryable = str_contains($error, '[NON_RETRYABLE]');
+        $retryable = str_contains($error, '[RETRYABLE]');
+        $cleanError = trim(str_replace(['[NON_RETRYABLE]', '[RETRYABLE]'], '', $error));
+        if ($cleanError === '') {
+            $cleanError = $error;
+        }
 
-        if ($attempts >= $maxAttempts) {
+        if ($nonRetryable || $attempts >= $maxAttempts) {
             $dlq = $this->db->prepare(
                 'INSERT INTO jobs_dlq (job_id, queue_name, payload_json, attempts, max_attempts, last_error, failed_at)
                  VALUES (?, ?, ?, ?, ?, ?, NOW())'
             );
             $dlq->execute([
                 (int) $job['id'],
-                (string) $job['queue_name'],
+                $queueName,
                 (string) $job['payload_json'],
                 $attempts,
                 $maxAttempts,
-                $error,
+                $cleanError,
             ]);
 
             $markFailed = $this->db->prepare(
@@ -164,11 +171,11 @@ class JobQueue
                      updated_at = NOW()
                  WHERE id = ?"
             );
-            $markFailed->execute([$error, $jobId]);
+            $markFailed->execute([$cleanError, $jobId]);
             return;
         }
 
-        $backoff = $this->computeBackoffSeconds($attempts);
+        $backoff = $this->computeBackoffSeconds($attempts, $queueName, $retryable);
         $retry = $this->db->prepare(
             "UPDATE jobs_queue
              SET status = 'RETRY',
@@ -177,7 +184,7 @@ class JobQueue
                  updated_at = NOW()
              WHERE id = ?"
         );
-        $retry->execute([$error, $backoff, $jobId]);
+        $retry->execute([$cleanError, $backoff, $jobId]);
     }
 
     private function recoverStaleJobs(string $queue): void
@@ -196,8 +203,18 @@ class JobQueue
         $stmt->execute([$queue]);
     }
 
-    private function computeBackoffSeconds(int $attempt): int
+    private function computeBackoffSeconds(int $attempt, string $queueName = '', bool $retryable = false): int
     {
+        if ($queueName === 'jobs:fiscal-submit') {
+            // Backoff exponencial para fiscal: 15, 30, 60, 120, 240, ... max 15 min.
+            $exp = max(0, $attempt - 1);
+            return min(900, 15 * (2 ** $exp));
+        }
+
+        if ($retryable) {
+            return min(300, max(10, $attempt * 20));
+        }
+
         return min(300, max(5, $attempt * 10));
     }
 

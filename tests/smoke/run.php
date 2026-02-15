@@ -266,6 +266,106 @@ function runPositiveFlow(string $baseUrl, array &$ctx): void
         assertApiOk($res, 'sync.status');
     });
 
+    runStep('Fiscal Status', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/fiscal/status',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'fiscal.status');
+        assertApiOk($res, 'fiscal.status');
+    });
+
+    runStep('Fiscal Documents List', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/fiscal/documents?limit=5',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'fiscal.documents.list');
+        assertApiOk($res, 'fiscal.documents.list');
+    });
+
+    runStep('Fiscal Documents Summary', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/fiscal/documents/summary',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'fiscal.documents.summary');
+        assertApiOk($res, 'fiscal.documents.summary');
+    });
+
+    runStep('Fiscal Documents Search', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/fiscal/documents/search?limit=5',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'fiscal.documents.search');
+        assertApiOk($res, 'fiscal.documents.search');
+    });
+
+    runStep('Fiscal Metrics', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/fiscal/metrics',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'fiscal.metrics');
+        assertApiOk($res, 'fiscal.metrics');
+    });
+
+    runStep('Fiscal Retry Concurrent Idempotency Basic', function () use ($baseUrl, &$ctx): void {
+        $list = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/fiscal/documents?limit=1',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($list, 200, 'fiscal.retry.concurrent.list');
+        assertApiOk($list, 'fiscal.retry.concurrent.list');
+
+        $first = $list['json']['data'][0] ?? null;
+        if (!is_array($first) || (int) ($first['id'] ?? 0) <= 0) {
+            smokeInfo('fiscal.retry.concurrent: sin documentos fiscales, se omite verificación.');
+            return;
+        }
+
+        $docId = (int) $first['id'];
+        $responses = requestJsonConcurrentPair(
+            'POST',
+            $baseUrl . '/api/v1/fiscal/documents/' . $docId . '/retry',
+            [],
+            authHeaders($ctx['access_token'])
+        );
+
+        foreach ($responses as $res) {
+            assertStatus($res, 202, 'fiscal.retry.concurrent.status');
+            assertApiOk($res, 'fiscal.retry.concurrent.ok');
+        }
+
+        $jobA = (int) ($responses[0]['json']['data']['job_id'] ?? 0);
+        $jobB = (int) ($responses[1]['json']['data']['job_id'] ?? 0);
+        if ($jobA <= 0 || $jobB <= 0) {
+            fail('fiscal.retry.concurrent: job_id inválido');
+        }
+
+        if ($jobA !== $jobB) {
+            fail('fiscal.retry.concurrent: se esperaba mismo job_id por idempotencia. recibidos=' . $jobA . ',' . $jobB);
+        }
+    });
+
     runStep('Sync Ingest Idempotency Duplicate', function () use ($baseUrl, &$ctx): void {
         $idempotencyKey = 'sync-idem-' . bin2hex(random_bytes(4));
         $eventId = uuidV4();
@@ -375,6 +475,42 @@ function runNegativeFlow(string $baseUrl, array $ctx, PDO $db): void
         } finally {
             setTenantModulesRaw($db, $tenantId, $previousModules);
         }
+    });
+
+    runStep('Fiscal Config Validation', function () use ($baseUrl, $ctx): void {
+        $res = requestJson(
+            'PUT',
+            $baseUrl . '/api/v1/fiscal/config',
+            [
+                'fiscal' => [
+                    'enabled' => true,
+                    'dgii_registered' => false,
+                    'ncf_type' => 'B01',
+                    'series' => 'B01',
+                ],
+            ],
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 422, 'fiscal.config.validation');
+        assertApiError($res, 'VALIDATION_ERROR', 'fiscal.config.validation');
+    });
+
+    runStep('Fiscal Webhook Unauthorized', function () use ($baseUrl): void {
+        $res = requestJson(
+            'POST',
+            $baseUrl . '/api/v1/fiscal/webhook/ack',
+            [
+                'tenant_id' => 1,
+                'fiscal_document_id' => 1,
+                'ack_code' => 'ACCEPTED',
+                'ack_message' => 'Ack de prueba',
+            ],
+            []
+        );
+
+        assertStatus($res, 401, 'fiscal.webhook.unauthorized');
+        assertApiError($res, 'UNAUTHORIZED', 'fiscal.webhook.unauthorized');
     });
 }
 
@@ -653,6 +789,11 @@ function runStep(string $name, callable $fn): void
     $GLOBALS['SMOKE_STATS']['steps_ok']++;
     $GLOBALS['SMOKE_STATS']['current_step'] = '';
     fwrite(STDOUT, '[OK] ' . $name . "\n");
+}
+
+function smokeInfo(string $message): void
+{
+    fwrite(STDOUT, '[INFO] ' . $message . "\n");
 }
 
 function fail(string $message): void

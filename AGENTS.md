@@ -93,7 +93,10 @@ Middleware obligatorios:
 - Rate limit en login.
 - Pruebas smoke básicas o requests .http en /docs.
 
-## 8) Wave actual
+## 8) Estado por Wave
 - Wave 0: Fundaciones (auth, RBAC, tenant_settings, audit, base API, colas base)
 - Wave 1: Facturación 8.5x11 (clientes, items, invoices, templates, pdf job, envío email job)
-- Wave 2: POS + Offline-First (PWA + Ticket + Caja + Sync por eventos).
+- Wave 2: POS + Offline-First (PWA + Ticket + Caja + Sync por eventos) **cerrada**.
+- Wave 3: Fiscal opcional (config, provider, webhook, observabilidad base) **cerrada**.
+- Wave 4: Robustez fiscal (retry/DLQ, estados, backoffice, métricas, hardening) **cerrada**.
+- Próxima etapa: Wave 5 (pendiente de definición ejecutable).

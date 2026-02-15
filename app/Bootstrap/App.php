@@ -25,6 +25,11 @@ use App\Documents\DocumentRepository;
 use App\Documents\DocumentService;
 use App\Documents\PdfService;
 use App\Email\EmailRepository;
+use App\Fiscal\FiscalAlertService;
+use App\Fiscal\FiscalController;
+use App\Fiscal\FiscalProviderFactory;
+use App\Fiscal\FiscalRepository;
+use App\Fiscal\FiscalService;
 use App\Jobs\JobQueue;
 use App\Invoices\InvoiceController;
 use App\Invoices\InvoiceRepository;
@@ -59,6 +64,9 @@ use App\Templates\TemplateController;
 use App\Templates\TemplateRepository;
 use App\Templates\TemplateService;
 use App\Settings\TenantSettingsRepository;
+use App\Settings\TenantSettingsService;
+use App\Settings\TenantSettingsValidator;
+use App\Tenancy\FiscalGuardMiddleware;
 use App\Tenancy\TenantGuardMiddleware;
 use App\Users\UserController;
 use App\Users\UserRepository;
@@ -161,8 +169,11 @@ class App
             $c->get(DocumentRepository::class),
             $c->get(DocumentService::class),
             $c->get(EmailRepository::class),
+            $c->get(FiscalRepository::class),
+            $c->get(FiscalService::class),
             $c->get(JobQueue::class),
             $c->get(AuditLogger::class),
+            $c->get(TenantSettingsRepository::class),
             $c->get('db')
         ));
         $container->set(BranchRepository::class, fn (Container $c) => new BranchRepository($c->get('db')));
@@ -250,6 +261,27 @@ class App
         $container->set(RefreshTokenRepository::class, fn (Container $c) => new RefreshTokenRepository($c->get('db')));
         $container->set(RoleRepository::class, fn (Container $c) => new RoleRepository($c->get('db')));
         $container->set(TenantSettingsRepository::class, fn (Container $c) => new TenantSettingsRepository($c->get('db')));
+        $container->set(TenantSettingsService::class, fn () => new TenantSettingsService());
+        $container->set(TenantSettingsValidator::class, fn () => new TenantSettingsValidator());
+        $container->set(FiscalRepository::class, fn (Container $c) => new FiscalRepository($c->get('db')));
+        $container->set(FiscalProviderFactory::class, fn () => new FiscalProviderFactory());
+        $container->set(FiscalAlertService::class, fn (Container $c) => new FiscalAlertService(
+            $c->get(EmailRepository::class),
+            $c->get(JobQueue::class)
+        ));
+        $container->set(FiscalService::class, fn (Container $c) => new FiscalService(
+            $c->get(TenantSettingsService::class),
+            $c->get(TenantSettingsValidator::class)
+        ));
+        $container->set(FiscalController::class, fn (Container $c) => new FiscalController(
+            $c->get(FiscalRepository::class),
+            $c->get(FiscalService::class),
+            $c->get(TenantSettingsRepository::class),
+            $c->get(JobQueue::class),
+            $c->get(AuditLogger::class),
+            $c->get(RateLimiter::class),
+            $c->get(FiscalAlertService::class)
+        ));
         $container->set(AuditRepository::class, fn (Container $c) => new AuditRepository($c->get('db')));
         $container->set(AuditLogger::class, fn (Container $c) => new AuditLogger($c->get(AuditRepository::class)));
 
@@ -282,6 +314,9 @@ class App
         $tenantGuard = new TenantGuardMiddleware(
             $this->container->get(TenantSettingsRepository::class)
         );
+        $fiscalGuard = new FiscalGuardMiddleware(
+            $this->container->get(TenantSettingsRepository::class)
+        );
 
         $authController = $this->container->get(AuthController::class);
         $customerController = $this->container->get(CustomerController::class);
@@ -295,6 +330,7 @@ class App
         $posSaleController = $this->container->get(PosSaleController::class);
         $cashMovementController = $this->container->get(CashMovementController::class);
         $syncController = $this->container->get(SyncController::class);
+        $fiscalController = $this->container->get(FiscalController::class);
 
         $router->get('/health', function (): array {
             return ['status' => 200, 'data' => ['status' => 'ok']];
@@ -303,6 +339,7 @@ class App
         $router->post('/api/v1/auth/login', [$authController, 'login']);
         $router->post('/api/v1/auth/refresh', [$authController, 'refresh']);
         $router->post('/api/v1/auth/logout', [$authController, 'logout']);
+        $router->post('/api/v1/fiscal/webhook/ack', [$fiscalController, 'webhookAck']);
 
         $userController = $this->container->get(UserController::class);
         $router->get('/api/v1/me', [$userController, 'me'], [$authMiddleware, $tenantGuard]);
@@ -369,6 +406,7 @@ class App
         $router->post('/api/v1/invoices/{id}/issue', [$invoiceController, 'issue'], [
             $authMiddleware,
             $invoicingGuard,
+            $fiscalGuard,
             new AuthorizationMiddleware('invoices.issue'),
         ]);
         $router->post('/api/v1/invoices/{id}/void', [$invoiceController, 'void'], [
@@ -385,6 +423,61 @@ class App
             $authMiddleware,
             $invoicingGuard,
             new AuthorizationMiddleware('invoices.write'),
+        ]);
+        $router->get('/api/v1/fiscal/status', [$fiscalController, 'status'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.read'),
+        ]);
+        $router->put('/api/v1/fiscal/config', [$fiscalController, 'updateConfig'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.manage'),
+        ]);
+        $router->get('/api/v1/fiscal/documents', [$fiscalController, 'listDocuments'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.read'),
+        ]);
+        $router->get('/api/v1/fiscal/documents/search', [$fiscalController, 'searchDocuments'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.read'),
+        ]);
+        $router->get('/api/v1/fiscal/documents/summary', [$fiscalController, 'summary'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.read'),
+        ]);
+        $router->get('/api/v1/fiscal/metrics', [$fiscalController, 'metrics'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.read'),
+        ]);
+        $router->get('/api/v1/fiscal/documents/{id}', [$fiscalController, 'getDocument'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.read'),
+        ]);
+        $router->get('/api/v1/fiscal/documents/{id}/events', [$fiscalController, 'listDocumentEvents'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.read'),
+        ]);
+        $router->get('/api/v1/fiscal/documents/{id}/acks', [$fiscalController, 'listDocumentAcks'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.read'),
+        ]);
+        $router->post('/api/v1/fiscal/documents/{id}/retry', [$fiscalController, 'retryDocument'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.manage'),
+        ]);
+        $router->post('/api/v1/fiscal/documents/retry-bulk', [$fiscalController, 'retryBulk'], [
+            $authMiddleware,
+            $tenantGuard,
+            new AuthorizationMiddleware('fiscal.manage'),
         ]);
 
         $router->post('/api/v1/invoice-templates', [$templateController, 'create'], [

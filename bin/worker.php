@@ -10,10 +10,15 @@ use App\Documents\DocumentService;
 use App\Documents\PdfService;
 use App\Email\EmailRepository;
 use App\Email\NullEmailSender;
+use App\Fiscal\FiscalAlertService;
+use App\Fiscal\FiscalJobService;
+use App\Fiscal\FiscalProviderFactory;
+use App\Fiscal\FiscalRepository;
 use App\Invoices\InvoiceRepository;
 use App\Invoices\InvoiceService;
 use App\Jobs\JobQueue;
 use App\Recurring\RecurringRepository;
+use App\Settings\TenantSettingsRepository;
 use App\Shared\Helpers;
 
 require_once dirname(__DIR__) . '/app/Bootstrap/Env.php';
@@ -74,9 +79,29 @@ $emailRepository = new EmailRepository($db);
 $emailSender = new NullEmailSender();
 $invoiceService = new InvoiceService(new Validator());
 $recurringRepository = new RecurringRepository($db);
+$fiscalRepository = new FiscalRepository($db);
+$tenantSettingsRepository = new TenantSettingsRepository($db);
+$fiscalProviderFactory = new FiscalProviderFactory();
+$fiscalAlertService = new FiscalAlertService($emailRepository, $queue);
+$fiscalJobService = new FiscalJobService(
+    $fiscalRepository,
+    $tenantSettingsRepository,
+    $fiscalProviderFactory,
+    $fiscalAlertService
+);
 
 enqueueLegacyPendingJobs($queue, $documentRepository, $emailRepository, $recurringRepository);
-processQueue($queue, $documentService, $emailRepository, $emailSender, $recurringRepository, $invoiceRepository, $invoiceService, $db);
+processQueue(
+    $queue,
+    $documentService,
+    $emailRepository,
+    $emailSender,
+    $recurringRepository,
+    $invoiceRepository,
+    $invoiceService,
+    $fiscalJobService,
+    $db
+);
 
 fwrite(STDOUT, "Worker finalizado.\n");
 
@@ -119,6 +144,7 @@ function processQueue(
     RecurringRepository $recurringRepository,
     InvoiceRepository $invoiceRepository,
     InvoiceService $invoiceService,
+    FiscalJobService $fiscalJobService,
     PDO $db
 ): void {
     $loops = 0;
@@ -144,6 +170,16 @@ function processQueue(
                 throw new RuntimeException('rule_id requerido');
             }
             processRecurringRule($recurringRepository, $invoiceRepository, $invoiceService, $db, (int) $payload['rule_id']);
+        }) || $processed;
+
+        $processed = consumeJob($queue, 'jobs:fiscal-submit', function (array $payload) use ($fiscalJobService): void {
+            $tenantId = (int) ($payload['tenant_id'] ?? 0);
+            $documentId = (int) ($payload['fiscal_document_id'] ?? 0);
+            if ($tenantId <= 0 || $documentId <= 0) {
+                throw new RuntimeException('tenant_id y fiscal_document_id requeridos');
+            }
+
+            $fiscalJobService->submitDocument($tenantId, $documentId);
         }) || $processed;
 
         if (!$processed) {

@@ -1,4 +1,4 @@
-# ParrePos (Wave 0)
+# ParrePos (Wave 4 - Cerrada)
 
 Bootstrap base de un SaaS POS multi-tenant en PHP 8.2 puro.
 
@@ -55,16 +55,50 @@ php bin/worker.php run
 - Requiere `modules.pos.enabled=true` en tenant_settings.
 - La UI demo guarda eventos en IndexedDB y los sincroniza por `/api/v1/sync/events`.
 
+## Backoffice Fiscal (Wave 4)
+- URL: `http://localhost/fiscal-backoffice.html`
+- Requiere token Bearer del tenant.
+- Permite búsqueda de documentos, consulta de eventos/acuses y retry (individual/masivo).
+
 ## Operativa de caja
 - Los movimientos manuales (IN/OUT) se registran en `pos_cash_movements`.
 - El arqueo usa: apertura + ventas en efectivo + entradas - salidas (change_total futuro).
 
 ## Variables de entorno
 Ver `.env.example` para los valores base.
+- `FISCAL_WEBHOOK_KEY`: llave para `POST /api/v1/fiscal/webhook/ack`.
+- `FISCAL_PROVIDER_DEFAULT`: provider fiscal por defecto (`MOCK` o `DGII`).
+- `FISCAL_DGII_URL`: endpoint DGII para provider `DGII`.
+- `FISCAL_DGII_TIMEOUT`: timeout HTTP de envío fiscal.
+- `FISCAL_SIGNING_SECRET`: secreto global fallback para firma HMAC fiscal.
+- `FISCAL_ALERT_EMAILS`: lista de correos para alertas fiscales (`a@x.com,b@y.com`).
+- `FISCAL_ALERT_WEBHOOK_URL`: webhook interno opcional para alertas fiscales.
 
 ## Endpoints
 Ver `docs/api.md`.
-Checklist de salida Wave 2.2: `docs/release-wave-2.2.md`
+
+## Estado actual
+- Estado consolidado: `docs/project-status.md`
+- Contexto operativo: `context.md`
+- Checklist salida Wave 2.2: `docs/release-wave-2.2.md`
+- Cierre Wave 3:
+  - `docs/release-wave-3-acta.md`
+  - `docs/release-wave-3-acta-w3-006-010.md`
+  - `docs/release-wave-3-acta-w3-011-017.md`
+- Wave 4 (cerrada):
+  - `docs/release-wave-4-acta-w4-001-002.md`
+  - `docs/release-wave-4-acta-w4-003-004.md`
+  - `docs/release-wave-4-acta-w4-005.md`
+  - `docs/release-wave-4-acta-w4-006-007.md`
+  - `docs/release-wave-4-acta-w4-008-009.md`
+  - `docs/release-wave-4-w4-005.md`
+  - `docs/release-wave-4-w4-006-007.md`
+  - `docs/release-wave-4-w4-008-009.md`
+  - `docs/release-wave-4-w4-010.md`
+  - `docs/release-wave-4-checklist-w4-010.md`
+  - `docs/release-wave-4-acta-final.md`
+  - `docs/release-notes-wave-4.md`
+  - `docs/release-wave-4-backlog.md`
 
 ## Probar con Rest Client
 Usa `docs/requests.http` (VS Code REST Client) y completa `{{access_token}}` y `{{refresh_token}}`.
@@ -92,3 +126,4 @@ Atajos por CLI:
 ## Notas
 - Respuestas siguen el formato `ok/error` definido en `AGENTS.md`.
 - Los tokens refresh se guardan hashed y se rotan en cada refresh.
+- Facturacion fiscal se mantiene opcional por tenant.

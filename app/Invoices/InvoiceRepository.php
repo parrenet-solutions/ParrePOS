@@ -121,4 +121,67 @@ class InvoiceRepository
 
         return $next;
     }
+
+    public function nextFiscalSequence(int $tenantId, string $ncfType, string $series): int
+    {
+        $stmt = $this->db->prepare(
+            'SELECT current_number FROM fiscal_sequences WHERE tenant_id = ? AND ncf_type = ? AND series = ? LIMIT 1 FOR UPDATE'
+        );
+        $stmt->execute([$tenantId, $ncfType, $series]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            $this->db->prepare(
+                'INSERT INTO fiscal_sequences (tenant_id, ncf_type, series, current_number, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())'
+            )->execute([$tenantId, $ncfType, $series, 1]);
+
+            return 1;
+        }
+
+        $next = (int) $row['current_number'] + 1;
+        $this->db->prepare(
+            'UPDATE fiscal_sequences SET current_number = ?, updated_at = NOW() WHERE tenant_id = ? AND ncf_type = ? AND series = ?'
+        )->execute([$next, $tenantId, $ncfType, $series]);
+
+        return $next;
+    }
+
+    public function createFiscalDocument(
+        int $tenantId,
+        int $invoiceId,
+        string $ncfType,
+        string $series,
+        int $sequence,
+        string $ncf,
+        array $requestPayload
+    ): int {
+        $stmt = $this->db->prepare(
+            'INSERT INTO fiscal_documents (tenant_id, invoice_id, status, ncf_type, series, sequence, ncf, request_payload, created_at, updated_at) '
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())'
+        );
+        $stmt->execute([
+            $tenantId,
+            $invoiceId,
+            'PENDING',
+            $ncfType,
+            $series,
+            $sequence,
+            $ncf,
+            json_encode($requestPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+
+        $fiscalDocumentId = (int) $this->db->lastInsertId();
+
+        $this->db->prepare(
+            'INSERT INTO fiscal_events (tenant_id, fiscal_document_id, event_type, status, payload_json, created_at) VALUES (?, ?, ?, ?, ?, NOW())'
+        )->execute([
+            $tenantId,
+            $fiscalDocumentId,
+            'CREATED',
+            'PENDING',
+            json_encode(['invoice_id' => $invoiceId, 'ncf' => $ncf], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+
+        return $fiscalDocumentId;
+    }
 }

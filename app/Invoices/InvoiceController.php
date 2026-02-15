@@ -8,7 +8,10 @@ use App\Customers\CustomerRepository;
 use App\Documents\DocumentRepository;
 use App\Documents\DocumentService;
 use App\Email\EmailRepository;
+use App\Fiscal\FiscalRepository;
 use App\Jobs\JobQueue;
+use App\Fiscal\FiscalService;
+use App\Settings\TenantSettingsRepository;
 use App\Shared\Exceptions\HttpException;
 use App\Shared\Helpers;
 use PDO;
@@ -21,8 +24,11 @@ class InvoiceController
     private DocumentRepository $documentRepository;
     private DocumentService $documentService;
     private EmailRepository $emailRepository;
+    private FiscalRepository $fiscalRepository;
+    private FiscalService $fiscalService;
     private JobQueue $queue;
     private AuditLogger $audit;
+    private TenantSettingsRepository $tenantSettingsRepository;
     private PDO $db;
 
     public function __construct(
@@ -32,8 +38,11 @@ class InvoiceController
         DocumentRepository $documentRepository,
         DocumentService $documentService,
         EmailRepository $emailRepository,
+        FiscalRepository $fiscalRepository,
+        FiscalService $fiscalService,
         JobQueue $queue,
         AuditLogger $audit,
+        TenantSettingsRepository $tenantSettingsRepository,
         PDO $db
     ) {
         $this->repository = $repository;
@@ -42,8 +51,11 @@ class InvoiceController
         $this->documentRepository = $documentRepository;
         $this->documentService = $documentService;
         $this->emailRepository = $emailRepository;
+        $this->fiscalRepository = $fiscalRepository;
+        $this->fiscalService = $fiscalService;
         $this->queue = $queue;
         $this->audit = $audit;
+        $this->tenantSettingsRepository = $tenantSettingsRepository;
         $this->db = $db;
     }
 
@@ -121,15 +133,61 @@ class InvoiceController
             throw new HttpException(409, 'INVALID_STATE', 'Factura no está en borrador');
         }
 
-        $series = 'A';
+        $fiscalConfig = $this->tenantSettingsRepository->getFiscalConfig($tenantId);
 
-        Helpers::transaction($this->db, function () use ($tenantId, $id, $series) {
+        $fiscalDocumentId = Helpers::transaction($this->db, function () use ($tenantId, $id, $fiscalConfig, $invoice) {
+            if (($fiscalConfig['enabled'] ?? false) === true) {
+                $customer = $this->customerRepository->findById($tenantId, (int) ($invoice['customer_id'] ?? 0));
+                if (!$customer) {
+                    throw new HttpException(422, 'VALIDATION_ERROR', 'Cliente de factura inválido para fiscal');
+                }
+
+                $issuedToday = $this->fiscalRepository->countIssuedToday($tenantId);
+                $issuedMonth = $this->fiscalRepository->countIssuedMonth($tenantId);
+                $this->fiscalService->validateIssueConstraints(
+                    $fiscalConfig,
+                    $customer,
+                    (float) ($invoice['total'] ?? 0),
+                    $issuedToday,
+                    $issuedMonth
+                );
+
+                $ncfType = (string) ($fiscalConfig['ncf_type'] ?? 'B01');
+                $series = (string) ($fiscalConfig['series'] ?? $ncfType);
+                $sequence = $this->repository->nextFiscalSequence($tenantId, $ncfType, $series);
+                $invoiceNumber = $this->service->formatInvoiceNumber($series, $sequence);
+                $this->repository->issue($tenantId, $id, $series, $sequence, $invoiceNumber);
+                return $this->repository->createFiscalDocument(
+                    $tenantId,
+                    $id,
+                    $ncfType,
+                    $series,
+                    $sequence,
+                    $invoiceNumber,
+                    [
+                        'invoice_total' => $invoice['total'] ?? null,
+                        'customer_id' => $invoice['customer_id'] ?? null,
+                    ]
+                );
+            }
+
+            $series = 'A';
             $sequence = $this->repository->nextSequence($tenantId, $series);
             $invoiceNumber = $this->service->formatInvoiceNumber($series, $sequence);
             $this->repository->issue($tenantId, $id, $series, $sequence, $invoiceNumber);
+            return 0;
         });
 
         $this->audit->log($tenantId, (int) $request->getAttribute('user_id', 0), 'invoices.issue', ['invoice_id' => $id]);
+
+        if ($fiscalDocumentId > 0) {
+            $this->queue->push(
+                'jobs:fiscal-submit',
+                ['tenant_id' => $tenantId, 'fiscal_document_id' => $fiscalDocumentId],
+                'fiscal:document:' . $fiscalDocumentId,
+                5
+            );
+        }
 
         $docId = $this->documentRepository->createInvoicePdf($tenantId, $id, 'PENDING');
         if ($this->queue->isAvailable()) {
@@ -166,7 +224,14 @@ class InvoiceController
         }
 
         $this->repository->void($tenantId, $id, $reason);
+        $cancelledFiscalId = $this->fiscalRepository->cancelDocumentByInvoice($tenantId, $id, 'Invoice VOID: ' . $reason);
         $this->audit->log($tenantId, (int) $request->getAttribute('user_id', 0), 'invoices.void', ['invoice_id' => $id]);
+        if ($cancelledFiscalId !== null) {
+            $this->audit->log($tenantId, (int) $request->getAttribute('user_id', 0), 'fiscal.document.cancel', [
+                'invoice_id' => $id,
+                'fiscal_document_id' => $cancelledFiscalId,
+            ]);
+        }
 
         return ['status' => 200, 'data' => ['id' => $id, 'status' => 'VOID']];
     }

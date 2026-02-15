@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Backoffice Fiscal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Source+Sans+3:wght@400;600&display=swap');
+
+        :root {
+            --ink: #102030;
+            --muted: #4f6477;
+            --line: #d8e2ec;
+            --brand: #0d5ea6;
+            --brand-2: #1f9bcf;
+            --ok: #0f9d58;
+            --warn: #d97706;
+            --bad: #c62828;
+            --card: #ffffff;
+            --bg: #edf3f8;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Source Sans 3", "Segoe UI", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(1200px 420px at -10% -20%, #d7ecfb 0%, transparent 60%),
+                radial-gradient(980px 420px at 110% -10%, #e4f6ff 0%, transparent 62%),
+                var(--bg);
+        }
+
+        .shell {
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 18px;
+        }
+
+        .top {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            box-shadow: 0 10px 28px rgba(7, 35, 63, 0.06);
+        }
+
+        .head {
+            padding: 14px 16px 10px;
+            border-bottom: 1px solid var(--line);
+        }
+        .head h1, .head h2 {
+            margin: 0;
+            font-family: "Space Grotesk", sans-serif;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+        .head h1 { font-size: 1.25rem; }
+        .head h2 { font-size: 1.05rem; }
+        .sub { margin-top: 6px; color: var(--muted); font-size: 0.95rem; }
+
+        .body { padding: 14px 16px; }
+        .row { display: grid; gap: 10px; grid-template-columns: repeat(6, 1fr); }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field label { font-size: 0.84rem; color: var(--muted); }
+        .field input, .field select, .field textarea {
+            width: 100%;
+            border: 1px solid #bfd0df;
+            border-radius: 10px;
+            padding: 9px 10px;
+            background: #fff;
+            color: var(--ink);
+            font-family: inherit;
+        }
+        .field textarea { min-height: 56px; resize: vertical; }
+
+        .actions {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 9px 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: "Space Grotesk", sans-serif;
+            color: #fff;
+            background: linear-gradient(135deg, var(--brand), var(--brand-2));
+        }
+        button.alt { background: #455a64; }
+        button.bad { background: var(--bad); }
+        button.warn { background: var(--warn); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 12px;
+        }
+
+        .kpis {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(120px, 1fr));
+            gap: 10px;
+        }
+        .kpi {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 10px;
+            background: #fbfdff;
+        }
+        .kpi .k { color: var(--muted); font-size: 0.82rem; }
+        .kpi .v { font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 1.1rem; margin-top: 4px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.92rem;
+        }
+        th, td {
+            border-bottom: 1px solid var(--line);
+            padding: 8px 6px;
+            text-align: left;
+        }
+        th { color: var(--muted); font-weight: 600; }
+        tr:hover { background: #f7fbff; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 700;
+        }
+        .st-accepted { background: #d8f3e4; color: #0f7a42; }
+        .st-failed { background: #ffe0e0; color: #b71c1c; }
+        .st-rejected { background: #ffe8d2; color: #9a4f00; }
+        .st-processing, .st-pending, .st-sent { background: #e4f2ff; color: #0c4a7a; }
+        .st-cancelled { background: #eceff1; color: #37474f; }
+
+        .columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .log {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fbfdff;
+            padding: 10px;
+            max-height: 360px;
+            overflow: auto;
+            font-size: 0.86rem;
+        }
+
+        .note {
+            margin-top: 10px;
+            border: 1px dashed #b7cadb;
+            border-radius: 10px;
+            padding: 9px 10px;
+            color: var(--muted);
+            background: #f7fbff;
+            font-size: 0.9rem;
+        }
+
+        .msg {
+            margin-top: 8px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 0.86rem;
+        }
+        .msg.ok { background: #dff4e8; color: #0f7a42; }
+        .msg.err { background: #ffe3e3; color: #a61111; }
+
+        @media (max-width: 980px) {
+            .top, .grid { grid-template-columns: 1fr; }
+            .row { grid-template-columns: 1fr 1fr; }
+            .kpis { grid-template-columns: 1fr 1fr; }
+            .columns { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 620px) {
+            .row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <div class="top">
+        <section class="panel">
+            <div class="head">
+                <h1>Backoffice Fiscal</h1>
+                <div class="sub">Operación diaria: búsqueda, resumen, detalle, eventos, acuses y retry.</div>
+            </div>
+            <div class="body">
+                <div class="row">
+                    <div class="field" style="grid-column: span 3;">
+                        <label>Access token (Bearer)</label>
+                        <textarea id="token" placeholder="Pega aquí el access_token"></textarea>
+                    </div>
+                    <div class="field">
+                        <label>Estado</label>
+                        <select id="status">
+                            <option value="">Todos</option>
+                            <option>PENDING</option><option>PROCESSING</option><option>SENT</option>
+                            <option>ACCEPTED</option><option>REJECTED</option><option>FAILED</option><option>CANCELLED</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>NCF</label>
+                        <input id="ncf" placeholder="B01..." />
+                    </div>
+                    <div class="field">
+                        <label>Límite</label>
+                        <input id="limit" type="number" min="1" max="200" value="20" />
+                    </div>
+                    <div class="field">
+                        <label>Fecha desde</label>
+                        <input id="dateFrom" type="date" />
+                    </div>
+                    <div class="field">
+                        <label>Fecha hasta</label>
+                        <input id="dateTo" type="date" />
+                    </div>
+                    <div class="field" style="grid-column: span 2;">
+                        <label>Retry bulk IDs</label>
+                        <input id="bulkIds" placeholder="Ej: 101,102,120" />
+                    </div>
+                </div>
+                <div class="actions">
+                    <button id="btnRefresh">Actualizar</button>
+                    <button id="btnRetryBulk" class="warn">Retry Bulk</button>
+                    <button id="btnClear" class="alt">Limpiar</button>
+                </div>
+                <div id="feedback"></div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="head">
+                <h2>KPIs Fiscales</h2>
+                <div class="sub">Métricas operativas de aceptación, fallos y cola.</div>
+            </div>
+            <div class="body">
+                <div class="kpis" id="kpis"></div>
+                <div class="note">
+                    Si fiscal no está habilitado en el tenant, este panel seguirá disponible pero con métricas en cero.
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="grid">
+        <section class="panel">
+            <div class="head">
+                <h2>Documentos</h2>
+            </div>
+            <div class="body">
+                <table id="docsTable">
+                    <thead>
+                    <tr>
+                        <th></th><th>ID</th><th>NCF</th><th>Estado</th><th>Track</th><th>Actualizado</th><th></th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="head">
+                <h2>Detalle Documento</h2>
+                <div class="sub mono" id="docTitle">Selecciona un documento</div>
+            </div>
+            <div class="body">
+                <div class="actions">
+                    <button id="btnRetryOne" class="warn" disabled>Retry</button>
+                </div>
+                <div class="columns">
+                    <div>
+                        <h3 style="margin:10px 0 6px;font-size:.95rem;">Eventos</h3>
+                        <div class="log" id="eventsLog"></div>
+                    </div>
+                    <div>
+                        <h3 style="margin:10px 0 6px;font-size:.95rem;">Acuses</h3>
+                        <div class="log" id="acksLog"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+(() => {
+    const base = '/api/v1';
+    const state = { selectedId: null, docs: [] };
+
+    const el = {
+        token: document.getElementById('token'),
+        status: document.getElementById('status'),
+        ncf: document.getElementById('ncf'),
+        limit: document.getElementById('limit'),
+        dateFrom: document.getElementById('dateFrom'),
+        dateTo: document.getElementById('dateTo'),
+        bulkIds: document.getElementById('bulkIds'),
+        btnRefresh: document.getElementById('btnRefresh'),
+        btnRetryBulk: document.getElementById('btnRetryBulk'),
+        btnClear: document.getElementById('btnClear'),
+        btnRetryOne: document.getElementById('btnRetryOne'),
+        feedback: document.getElementById('feedback'),
+        kpis: document.getElementById('kpis'),
+        docsTable: document.querySelector('#docsTable tbody'),
+        docTitle: document.getElementById('docTitle'),
+        eventsLog: document.getElementById('eventsLog'),
+        acksLog: document.getElementById('acksLog')
+    };
+
+    function token() { return (el.token.value || '').trim(); }
+    function authHeaders() {
+        const t = token();
+        return t ? { 'Authorization': 'Bearer ' + t } : {};
+    }
+    function showMsg(msg, isErr = false) {
+        el.feedback.innerHTML = '<div class="msg ' + (isErr ? 'err' : 'ok') + '">' + msg + '</div>';
+    }
+    function clearMsg() { el.feedback.innerHTML = ''; }
+    function esc(s) {
+        return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+    function statusBadge(status) {
+        const st = String(status || '').toLowerCase();
+        return '<span class="badge st-' + st + '">' + esc(status) + '</span>';
+    }
+
+    async function call(path, method = 'GET', body = null) {
+        const res = await fetch(base + path, {
+            method,
+            headers: Object.assign({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, authHeaders()),
+            body: body ? JSON.stringify(body) : undefined
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.ok) {
+            const m = json?.error?.message || ('HTTP ' + res.status);
+            throw new Error(m);
+        }
+        return json.data;
+    }
+
+    function query() {
+        const q = new URLSearchParams();
+        if (el.status.value) q.set('status', el.status.value);
+        if (el.ncf.value.trim()) q.set('ncf', el.ncf.value.trim());
+        if (el.dateFrom.value) q.set('date_from', el.dateFrom.value);
+        if (el.dateTo.value) q.set('date_to', el.dateTo.value);
+        q.set('limit', String(Math.max(1, Math.min(200, Number(el.limit.value || 20)))));
+        return '?' + q.toString();
+    }
+
+    function renderKpis(metrics) {
+        const cards = [
+            ['Total docs', metrics.total_docs],
+            ['Aceptación %', metrics.acceptance_rate + '%'],
+            ['Error %', metrics.error_rate + '%'],
+            ['Latencia prom (s)', metrics.avg_latency_seconds ?? 'n/a'],
+            ['Queue pending', metrics.queue?.pending ?? 0],
+            ['Queue retry', metrics.queue?.retry ?? 0],
+            ['Queue processing', metrics.queue?.processing ?? 0],
+            ['DLQ total', metrics.dlq_total ?? 0]
+        ];
+        el.kpis.innerHTML = cards.map(([k, v]) =>
+            '<div class="kpi"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div></div>'
+        ).join('');
+    }
+
+    function renderDocs(docs) {
+        state.docs = docs;
+        el.docsTable.innerHTML = docs.map(d => `
+            <tr>
+                <td><input type="checkbox" data-doc-check="${d.id}"></td>
+                <td class="mono">${esc(d.id)}</td>
+                <td class="mono">${esc(d.ncf || '-')}</td>
+                <td>${statusBadge(d.status)}</td>
+                <td class="mono">${esc(d.track_id || '-')}</td>
+                <td>${esc(d.updated_at || d.created_at || '-')}</td>
+                <td><button data-open="${d.id}" class="alt" style="padding:6px 9px;font-size:.8rem;">Detalle</button></td>
+            </tr>
+        `).join('');
+    }
+
+    async function loadAll() {
+        clearMsg();
+        if (!token()) {
+            showMsg('Debes pegar un access token para operar.', true);
+            return;
+        }
+        try {
+            const [docs, metrics] = await Promise.all([
+                call('/fiscal/documents/search' + query()),
+                call('/fiscal/metrics' + query())
+            ]);
+            renderDocs(docs);
+            renderKpis(metrics);
+            showMsg('Datos actualizados.');
+        } catch (e) {
+            showMsg(e.message, true);
+        }
+    }
+
+    async function openDoc(id) {
+        state.selectedId = id;
+        el.btnRetryOne.disabled = false;
+        el.docTitle.textContent = 'Documento #' + id;
+        try {
+            const [events, acks] = await Promise.all([
+                call('/fiscal/documents/' + id + '/events?limit=50'),
+                call('/fiscal/documents/' + id + '/acks?limit=50')
+            ]);
+            el.eventsLog.innerHTML = events.map(e =>
+                '<div><b>' + esc(e.event_type) + '</b> · ' + statusBadge(e.status) +
+                '<div class="mono">' + esc(e.created_at) + '</div></div><hr>'
+            ).join('') || '<div>Sin eventos.</div>';
+            el.acksLog.innerHTML = acks.map(a =>
+                '<div><b>' + esc(a.ack_code) + '</b><div>' + esc(a.ack_message || '') +
+                '</div><div class="mono">' + esc(a.received_at) + '</div></div><hr>'
+            ).join('') || '<div>Sin acuses.</div>';
+        } catch (e) {
+            showMsg(e.message, true);
+        }
+    }
+
+    async function retryOne() {
+        if (!state.selectedId) return;
+        try {
+            await call('/fiscal/documents/' + state.selectedId + '/retry', 'POST');
+            showMsg('Retry encolado para documento #' + state.selectedId);
+            await loadAll();
+        } catch (e) {
+            showMsg(e.message, true);
+        }
+    }
+
+    async function retryBulk() {
+        try {
+            let ids = [];
+            const manual = el.bulkIds.value.trim();
+            if (manual) {
+                ids = manual.split(',').map(v => Number(v.trim())).filter(v => Number.isInteger(v) && v > 0);
+            } else {
+                ids = Array.from(document.querySelectorAll('[data-doc-check]:checked'))
+                    .map(i => Number(i.getAttribute('data-doc-check')))
+                    .filter(v => Number.isInteger(v) && v > 0);
+            }
+            if (ids.length === 0) throw new Error('No hay IDs para retry bulk.');
+            const res = await call('/fiscal/documents/retry-bulk', 'POST', { ids });
+            showMsg('Retry bulk ejecutado. queued=' + (res.queued?.length || 0) + ', skipped=' + (res.skipped?.length || 0));
+            await loadAll();
+        } catch (e) {
+            showMsg(e.message, true);
+        }
+    }
+
+    el.btnRefresh.addEventListener('click', loadAll);
+    el.btnRetryOne.addEventListener('click', retryOne);
+    el.btnRetryBulk.addEventListener('click', retryBulk);
+    el.btnClear.addEventListener('click', () => {
+        el.status.value = '';
+        el.ncf.value = '';
+        el.dateFrom.value = '';
+        el.dateTo.value = '';
+        el.limit.value = '20';
+        el.bulkIds.value = '';
+        clearMsg();
+    });
+    el.docsTable.addEventListener('click', (ev) => {
+        const btn = ev.target.closest('[data-open]');
+        if (!btn) return;
+        openDoc(Number(btn.getAttribute('data-open')));
+    });
+})();
+</script>
+</body>
+</html>
