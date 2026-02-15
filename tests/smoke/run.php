@@ -39,6 +39,7 @@ $ctx = [
     'branch_id' => 0,
     'register_id' => 0,
     'cash_session_id' => 0,
+    'inventory_item_id' => 0,
     'device_id' => 'smoke-device-' . bin2hex(random_bytes(3)),
 ];
 
@@ -264,6 +265,67 @@ function runPositiveFlow(string $baseUrl, array &$ctx): void
 
         assertStatus($res, 200, 'sync.status');
         assertApiOk($res, 'sync.status');
+
+        $data = $res['json']['data'] ?? null;
+        if (!is_array($data)) {
+            fail('sync.status: data invalido');
+        }
+
+        assertArrayHasKeys($data, [
+            'pending_count',
+            'failed_count',
+            'conflict_count',
+            'last_applied_at',
+            'last_event_at',
+        ], 'sync.status.schema');
+    });
+
+    runStep('Ops Tenant Metrics', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/ops/tenant-metrics',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'ops.tenant-metrics');
+        assertApiOk($res, 'ops.tenant-metrics');
+
+        $data = $res['json']['data'] ?? null;
+        if (!is_array($data)) {
+            fail('ops.tenant-metrics: data invalido');
+        }
+
+        assertArrayHasKeys($data, ['sync', 'conflicts', 'jobs', 'fiscal'], 'ops.tenant-metrics.sections');
+        assertArrayHasKeys((array) ($data['sync'] ?? []), ['total_events', 'applied', 'failed', 'conflicts', 'last_event_at'], 'ops.tenant-metrics.sync');
+        assertArrayHasKeys((array) ($data['conflicts'] ?? []), ['total', 'resolved', 'open'], 'ops.tenant-metrics.conflicts');
+        assertArrayHasKeys((array) ($data['jobs'] ?? []), ['pending', 'retry', 'processing', 'failed', 'completed', 'dlq_total'], 'ops.tenant-metrics.jobs');
+        assertArrayHasKeys((array) ($data['fiscal'] ?? []), ['total', 'accepted', 'rejected', 'failed'], 'ops.tenant-metrics.fiscal');
+    });
+
+    runStep('Ops Sync Conflicts', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/ops/sync-conflicts?resolved=0&limit=10',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'ops.sync-conflicts');
+        assertApiOk($res, 'ops.sync-conflicts');
+
+        $rows = $res['json']['data'] ?? null;
+        if (!is_array($rows)) {
+            fail('ops.sync-conflicts: data invalido');
+        }
+
+        if ($rows !== []) {
+            $first = $rows[0];
+            if (!is_array($first)) {
+                fail('ops.sync-conflicts: row invalido');
+            }
+            assertArrayHasKeys($first, ['id', 'device_id', 'type', 'op_id', 'event_id', 'existing_event_id', 'reason_code', 'resolved', 'created_at'], 'ops.sync-conflicts.row');
+        }
     });
 
     runStep('Fiscal Status', function () use ($baseUrl, &$ctx): void {
@@ -366,6 +428,101 @@ function runPositiveFlow(string $baseUrl, array &$ctx): void
         }
     });
 
+    runStep('Inventory Manual IN and Stock', function () use ($baseUrl, &$ctx): void {
+        $itemRes = requestJson(
+            'POST',
+            $baseUrl . '/api/v1/items',
+            [
+                'type' => 'PRODUCT',
+                'name' => 'Item Inv Smoke ' . date('His'),
+                'price' => 150,
+                'itbis_rate' => 0.18,
+            ],
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($itemRes, 201, 'inventory.item.create');
+        assertApiOk($itemRes, 'inventory.item.create');
+
+        $itemId = (int) ($itemRes['json']['data']['id'] ?? 0);
+        if ($itemId <= 0) {
+            fail('inventory.item.create: id inválido');
+        }
+        $ctx['inventory_item_id'] = $itemId;
+
+        $movementRes = requestJson(
+            'POST',
+            $baseUrl . '/api/v1/inventory/movements',
+            [
+                'branch_id' => $ctx['branch_id'],
+                'item_id' => $itemId,
+                'movement_type' => 'IN',
+                'qty' => 10,
+                'reason_code' => 'ADJUST',
+            ],
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($movementRes, 201, 'inventory.movement.in');
+        assertApiOk($movementRes, 'inventory.movement.in');
+
+        $stock = getInventoryStock($baseUrl, $ctx['access_token'], $ctx['branch_id'], $itemId);
+        if ($stock < 10) {
+            fail('inventory.stock: esperado >= 10, recibido ' . $stock);
+        }
+    });
+
+    runStep('POS Sale Inventory Deduct and Void Reverse', function () use ($baseUrl, &$ctx): void {
+        $itemId = (int) ($ctx['inventory_item_id'] ?? 0);
+        if ($itemId <= 0) {
+            fail('pos.inventory.sale: item de inventario no inicializado');
+        }
+
+        $before = getInventoryStock($baseUrl, $ctx['access_token'], $ctx['branch_id'], $itemId);
+        $saleRes = requestJson(
+            'POST',
+            $baseUrl . '/api/v1/pos/sales',
+            [
+                'branch_id' => $ctx['branch_id'],
+                'register_id' => $ctx['register_id'],
+                'cash_session_id' => $ctx['cash_session_id'],
+                'items' => [[
+                    'item_id' => $itemId,
+                    'name' => 'Item Inv Smoke',
+                    'qty' => 1,
+                    'unit_price' => 150,
+                    'discount' => 0,
+                    'tax_rate' => 0.18,
+                ]],
+                'payments' => [[
+                    'method' => 'CASH',
+                    'amount' => 177,
+                ]],
+            ],
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($saleRes, 201, 'pos.inventory.sale');
+        assertApiOk($saleRes, 'pos.inventory.sale');
+
+        $saleId = (int) ($saleRes['json']['data']['id'] ?? 0);
+        if ($saleId <= 0) {
+            fail('pos.inventory.sale: id inválido');
+        }
+
+        $afterSale = getInventoryStock($baseUrl, $ctx['access_token'], $ctx['branch_id'], $itemId);
+        assertFloatEquals($afterSale, $before - 1, 'pos.inventory.sale.deduct');
+
+        $voidRes = requestJson(
+            'POST',
+            $baseUrl . '/api/v1/pos/sales/' . $saleId . '/void',
+            ['reason' => 'Smoke inventory reverse'],
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($voidRes, 200, 'pos.inventory.sale.void');
+        assertApiOk($voidRes, 'pos.inventory.sale.void');
+
+        $afterVoid = getInventoryStock($baseUrl, $ctx['access_token'], $ctx['branch_id'], $itemId);
+        assertFloatEquals($afterVoid, $before, 'pos.inventory.sale.void.reverse');
+    });
+
     runStep('Sync Ingest Idempotency Duplicate', function () use ($baseUrl, &$ctx): void {
         $idempotencyKey = 'sync-idem-' . bin2hex(random_bytes(4));
         $eventId = uuidV4();
@@ -415,6 +572,85 @@ function runPositiveFlow(string $baseUrl, array &$ctx): void
 
         $afterSecond = getCashSummary($baseUrl, $ctx['access_token'], $ctx['cash_session_id']);
         assertFloatEquals($afterSecond['in_total'], $afterFirst['in_total'], 'sync.ingest.second.no-side-effect');
+    });
+
+    runStep('Sync Conflict by OpId', function () use ($baseUrl, &$ctx): void {
+        $opId = 'sync-op-' . bin2hex(random_bytes(4));
+        $deviceId = $ctx['device_id'];
+        $cashSessionId = $ctx['cash_session_id'];
+
+        $before = getCashSummary($baseUrl, $ctx['access_token'], $cashSessionId);
+
+        $first = requestJson('POST', $baseUrl . '/api/v1/sync/events', [
+            'device_id' => $deviceId,
+            'events' => [[
+                'event_id' => uuidV4(),
+                'op_id' => $opId,
+                'device_id' => $deviceId,
+                'type' => 'cash_movement.created',
+                'idempotency_key' => 'sync-op-idem-a-' . bin2hex(random_bytes(4)),
+                'payload' => [
+                    'cash_session_id' => $cashSessionId,
+                    'type' => 'IN',
+                    'amount' => 11.0,
+                    'reason_code' => 'DEPOSIT',
+                    'description' => 'Sync op first',
+                    'reference' => 'SYNC-OP-A',
+                ],
+                'ts' => gmdate('c'),
+            ]],
+        ], authHeaders($ctx['access_token']));
+        assertStatus($first, 200, 'sync.conflict.first');
+        assertApiOk($first, 'sync.conflict.first');
+        $firstResult = $first['json']['data']['results'][0] ?? null;
+        if (!is_array($firstResult) || ($firstResult['status'] ?? '') !== 'applied') {
+            fail('sync.conflict.first: esperado applied');
+        }
+
+        $afterFirst = getCashSummary($baseUrl, $ctx['access_token'], $cashSessionId);
+        assertFloatEquals($afterFirst['in_total'], $before['in_total'] + 11.0, 'sync.conflict.first.effect');
+
+        $second = requestJson('POST', $baseUrl . '/api/v1/sync/events', [
+            'device_id' => $deviceId,
+            'events' => [[
+                'event_id' => uuidV4(),
+                'op_id' => $opId,
+                'device_id' => $deviceId,
+                'type' => 'cash_movement.created',
+                'idempotency_key' => 'sync-op-idem-b-' . bin2hex(random_bytes(4)),
+                'payload' => [
+                    'cash_session_id' => $cashSessionId,
+                    'type' => 'IN',
+                    'amount' => 99.0,
+                    'reason_code' => 'DEPOSIT',
+                    'description' => 'Sync op conflict',
+                    'reference' => 'SYNC-OP-B',
+                ],
+                'ts' => gmdate('c'),
+            ]],
+        ], authHeaders($ctx['access_token']));
+        assertStatus($second, 200, 'sync.conflict.second');
+        assertApiOk($second, 'sync.conflict.second');
+        $secondResult = $second['json']['data']['results'][0] ?? null;
+        if (!is_array($secondResult) || ($secondResult['status'] ?? '') !== 'conflict') {
+            fail('sync.conflict.second: esperado conflict');
+        }
+
+        $afterSecond = getCashSummary($baseUrl, $ctx['access_token'], $cashSessionId);
+        assertFloatEquals($afterSecond['in_total'], $afterFirst['in_total'], 'sync.conflict.second.no-side-effect');
+
+        $statusRes = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/sync/status?device_id=' . rawurlencode($deviceId),
+            null,
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($statusRes, 200, 'sync.conflict.status');
+        assertApiOk($statusRes, 'sync.conflict.status');
+        $conflictCount = (int) (($statusRes['json']['data']['conflict_count'] ?? 0));
+        if ($conflictCount < 1) {
+            fail('sync.conflict.status: conflict_count esperado >= 1, recibido ' . $conflictCount);
+        }
     });
 }
 
@@ -477,6 +713,63 @@ function runNegativeFlow(string $baseUrl, array $ctx, PDO $db): void
         }
     });
 
+    runStep('PlanGuard MODULE_DISABLED_BY_PLAN', function () use ($baseUrl, $ctx, $db): void {
+        $tenantId = (int) $ctx['tenant_id'];
+        $previousPlanModules = getTenantPlanModulesRaw($db, $tenantId);
+        if ($previousPlanModules === null) {
+            fail('plan.module.disabled: subscription/plan no encontrado');
+        }
+
+        try {
+            $disabled = disableModuleFromPlan($previousPlanModules, 'pos');
+            setTenantPlanModulesRaw($db, $tenantId, $disabled);
+
+            $res = requestJson(
+                'POST',
+                $baseUrl . '/api/v1/pos/registers/handshake',
+                [
+                    'device_id' => 'negative-plan-device',
+                    'app_version' => '2.2.0',
+                    'capabilities' => ['offline', 'sync'],
+                ],
+                authHeaders($ctx['access_token'])
+            );
+
+            assertStatus($res, 403, 'plan.module.disabled');
+            assertApiError($res, 'MODULE_DISABLED', 'plan.module.disabled');
+        } finally {
+            setTenantPlanModulesRaw($db, $tenantId, $previousPlanModules);
+        }
+    });
+
+    runStep('PlanGuard LIMIT_EXCEEDED', function () use ($baseUrl, $ctx, $db): void {
+        $tenantId = (int) $ctx['tenant_id'];
+        $previousPlanLimits = getTenantPlanLimitsRaw($db, $tenantId);
+        if ($previousPlanLimits === null) {
+            fail('plan.limit.exceeded: subscription/plan no encontrado');
+        }
+
+        try {
+            $zeroBranches = forcePlanLimit($previousPlanLimits, 'branches.max', 0);
+            setTenantPlanLimitsRaw($db, $tenantId, $zeroBranches);
+
+            $res = requestJson(
+                'POST',
+                $baseUrl . '/api/v1/branches',
+                [
+                    'name' => 'Sucursal Limite ' . date('His'),
+                    'address' => 'Prueba limite plan',
+                ],
+                authHeaders($ctx['access_token'])
+            );
+
+            assertStatus($res, 409, 'plan.limit.exceeded');
+            assertApiError($res, 'PLAN_LIMIT_EXCEEDED', 'plan.limit.exceeded');
+        } finally {
+            setTenantPlanLimitsRaw($db, $tenantId, $previousPlanLimits);
+        }
+    });
+
     runStep('Fiscal Config Validation', function () use ($baseUrl, $ctx): void {
         $res = requestJson(
             'PUT',
@@ -511,6 +804,18 @@ function runNegativeFlow(string $baseUrl, array $ctx, PDO $db): void
 
         assertStatus($res, 401, 'fiscal.webhook.unauthorized');
         assertApiError($res, 'UNAUTHORIZED', 'fiscal.webhook.unauthorized');
+    });
+
+    runStep('Ops Tenant Metrics Unauthorized', function () use ($baseUrl): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/ops/tenant-metrics',
+            null,
+            []
+        );
+
+        assertStatus($res, 401, 'ops.tenant-metrics.unauthorized');
+        assertApiError($res, 'UNAUTHORIZED', 'ops.tenant-metrics.unauthorized');
     });
 }
 
@@ -585,6 +890,84 @@ function disableModulePos(string $modulesRaw): string
     return json_encode($filtered, JSON_UNESCAPED_UNICODE) ?: $modulesRaw;
 }
 
+function getTenantPlanModulesRaw(PDO $db, int $tenantId): ?string
+{
+    $stmt = $db->prepare(
+        'SELECT p.modules_json
+         FROM tenant_subscriptions ts
+         INNER JOIN plans p ON p.id = ts.plan_id
+         WHERE ts.tenant_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$tenantId]);
+    $row = $stmt->fetch();
+    return isset($row['modules_json']) ? (string) $row['modules_json'] : null;
+}
+
+function setTenantPlanModulesRaw(PDO $db, int $tenantId, string $raw): void
+{
+    $stmt = $db->prepare(
+        'UPDATE plans p
+         INNER JOIN tenant_subscriptions ts ON ts.plan_id = p.id
+         SET p.modules_json = ?, p.updated_at = NOW()
+         WHERE ts.tenant_id = ?'
+    );
+    $stmt->execute([$raw, $tenantId]);
+}
+
+function disableModuleFromPlan(string $modulesRaw, string $module): string
+{
+    $decoded = json_decode($modulesRaw, true);
+    if (!is_array($decoded)) {
+        return json_encode([], JSON_UNESCAPED_UNICODE) ?: '[]';
+    }
+
+    $filtered = [];
+    foreach ($decoded as $value) {
+        if (is_string($value) && $value !== $module) {
+            $filtered[] = $value;
+        }
+    }
+
+    return json_encode(array_values($filtered), JSON_UNESCAPED_UNICODE) ?: $modulesRaw;
+}
+
+function getTenantPlanLimitsRaw(PDO $db, int $tenantId): ?string
+{
+    $stmt = $db->prepare(
+        'SELECT p.limits_json
+         FROM tenant_subscriptions ts
+         INNER JOIN plans p ON p.id = ts.plan_id
+         WHERE ts.tenant_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$tenantId]);
+    $row = $stmt->fetch();
+    return isset($row['limits_json']) ? (string) $row['limits_json'] : null;
+}
+
+function setTenantPlanLimitsRaw(PDO $db, int $tenantId, string $raw): void
+{
+    $stmt = $db->prepare(
+        'UPDATE plans p
+         INNER JOIN tenant_subscriptions ts ON ts.plan_id = p.id
+         SET p.limits_json = ?, p.updated_at = NOW()
+         WHERE ts.tenant_id = ?'
+    );
+    $stmt->execute([$raw, $tenantId]);
+}
+
+function forcePlanLimit(string $limitsRaw, string $key, int $value): string
+{
+    $decoded = json_decode($limitsRaw, true);
+    if (!is_array($decoded)) {
+        $decoded = [];
+    }
+
+    $decoded[$key] = max(0, $value);
+    return json_encode($decoded, JSON_UNESCAPED_UNICODE) ?: $limitsRaw;
+}
+
 function getCashSummary(string $baseUrl, string $accessToken, int $cashSessionId): array
 {
     $res = requestJson(
@@ -601,6 +984,27 @@ function getCashSummary(string $baseUrl, string $accessToken, int $cashSessionId
         'in_total' => (float) ($res['json']['data']['in_total'] ?? 0),
         'out_total' => (float) ($res['json']['data']['out_total'] ?? 0),
     ];
+}
+
+function getInventoryStock(string $baseUrl, string $accessToken, int $branchId, int $itemId): float
+{
+    $res = requestJson(
+        'GET',
+        $baseUrl . '/api/v1/inventory/stock?branch_id=' . $branchId . '&item_id=' . $itemId,
+        null,
+        authHeaders($accessToken)
+    );
+
+    assertStatus($res, 200, 'inventory.stock');
+    assertApiOk($res, 'inventory.stock');
+
+    $rows = $res['json']['data'] ?? [];
+    if (!is_array($rows) || $rows === []) {
+        return 0.0;
+    }
+
+    $stock = (float) ($rows[0]['stock'] ?? 0);
+    return $stock;
 }
 
 function requestJsonConcurrentPair(string $method, string $url, array $payload, array $headers): array
@@ -777,6 +1181,15 @@ function assertFloatEquals(float $actual, float $expected, string $scope, float 
 {
     if (abs($actual - $expected) > $eps) {
         fail($scope . ': esperado ' . $expected . ', recibido ' . $actual);
+    }
+}
+
+function assertArrayHasKeys(array $data, array $keys, string $scope): void
+{
+    foreach ($keys as $key) {
+        if (!array_key_exists((string) $key, $data)) {
+            fail($scope . ': falta key ' . $key);
+        }
     }
 }
 

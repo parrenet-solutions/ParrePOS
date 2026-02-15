@@ -6,6 +6,7 @@ Fecha de actualización: `2026-02-15`
 - Wave 2.2: cerrada.
 - Wave 3: cerrada.
 - Wave 4: cerrada y aprobada.
+- Wave 5: cerrada (W5-001..W5-010 aprobados).
 - Fiscal: opcional por tenant (no obligatoria para clientes no regularizados).
 
 ## Reglas obligatorias (resumen)
@@ -35,6 +36,16 @@ Fecha de actualización: `2026-02-15`
 - Estado consolidado: `docs/project-status.md`
 - Acta final Wave 4: `docs/release-wave-4-acta-final.md`
 - Release notes Wave 4: `docs/release-notes-wave-4.md`
+- Backlog Wave 5: `docs/release-wave-5-backlog.md`
+- Roadmap W5->W6: `docs/roadmap-wave-5-6.md`
+- Actas W5:
+  - `docs/release-wave-5-acta-w5-001-004.md`
+  - `docs/release-wave-5-acta-w5-005-006.md`
+  - `docs/release-wave-5-acta-w5-007-008.md`
+  - `docs/release-wave-5-acta-final.md`
+- Release notes W5:
+  - `docs/release-notes-wave-5.md`
+  - `docs/release-wave-5-checklist-baseline.md`
 
 ## Siguiente paso recomendado
-- Definir y abrir backlog ejecutable de Wave 5, manteniendo la política de fiscal opcional.
+- Congelar baseline con tag `wave-5-baseline` y luego arrancar Wave 6 según roadmap.

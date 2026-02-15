@@ -1,4 +1,4 @@
-# ParrePos (Wave 4 - Cerrada)
+# ParrePos (Wave 5 - Cerrada)
 
 Bootstrap base de un SaaS POS multi-tenant en PHP 8.2 puro.
 
@@ -80,6 +80,8 @@ Ver `docs/api.md`.
 ## Estado actual
 - Estado consolidado: `docs/project-status.md`
 - Contexto operativo: `context.md`
+- Roadmap W5->W6: `docs/roadmap-wave-5-6.md`
+- Backlog Wave 5: `docs/release-wave-5-backlog.md`
 - Checklist salida Wave 2.2: `docs/release-wave-2.2.md`
 - Cierre Wave 3:
   - `docs/release-wave-3-acta.md`
@@ -99,6 +101,19 @@ Ver `docs/api.md`.
   - `docs/release-wave-4-acta-final.md`
   - `docs/release-notes-wave-4.md`
   - `docs/release-wave-4-backlog.md`
+- Wave 5 (avance):
+  - `docs/release-wave-5-backlog.md`
+  - `docs/release-wave-5-w5-001-002.md`
+  - `docs/release-wave-5-w5-003-004.md`
+  - `docs/release-wave-5-w5-005-006.md`
+  - `docs/release-wave-5-w5-007-008.md`
+  - `docs/release-wave-5-w5-009-010.md`
+  - `docs/release-wave-5-acta-w5-001-004.md`
+  - `docs/release-wave-5-acta-w5-005-006.md`
+  - `docs/release-wave-5-acta-w5-007-008.md`
+  - `docs/release-wave-5-acta-final.md`
+  - `docs/release-notes-wave-5.md`
+  - `docs/release-wave-5-checklist-baseline.md`
 
 ## Probar con Rest Client
 Usa `docs/requests.http` (VS Code REST Client) y completa `{{access_token}}` y `{{refresh_token}}`.

@@ -12,6 +12,8 @@ Fecha de corte: `2026-02-15`
   - `W4-006` y `W4-007`: **Aprobados**.
   - `W4-008` y `W4-009`: **Aprobados**.
   - `W4-010`: **Aprobado**.
+- Wave 5:
+  - `W5-001` a `W5-010`: **Aprobados**.
 
 ## Alcance funcional alcanzado
 
@@ -52,13 +54,26 @@ Fecha de corte: `2026-02-15`
   - `docs/release-wave-4-acta-w4-008-009.md`
   - `docs/release-wave-4-acta-final.md`
 - Backlog Wave 4: `docs/release-wave-4-backlog.md`
+- Backlog Wave 5: `docs/release-wave-5-backlog.md`
+- Entrega técnica W5-001/002: `docs/release-wave-5-w5-001-002.md`
+- Entrega técnica W5-003/004: `docs/release-wave-5-w5-003-004.md`
+- Entrega técnica W5-005/006: `docs/release-wave-5-w5-005-006.md`
+- Acta W5-001..004: `docs/release-wave-5-acta-w5-001-004.md`
+- Acta W5-005..006: `docs/release-wave-5-acta-w5-005-006.md`
+- Entrega técnica W5-007/008: `docs/release-wave-5-w5-007-008.md`
+- Acta W5-007..008: `docs/release-wave-5-acta-w5-007-008.md`
+- Entrega técnica W5-009/010: `docs/release-wave-5-w5-009-010.md`
+- Acta final Wave 5: `docs/release-wave-5-acta-final.md`
+- Release notes Wave 5: `docs/release-notes-wave-5.md`
+- Checklist baseline W5: `docs/release-wave-5-checklist-baseline.md`
 
 ## Etapas siguientes (resumen)
 
 ### Post Wave 4
-- Congelar baseline con tag: `wave-4-baseline`.
-- Abrir backlog ejecutable de Wave 5.
+- Baseline congelada con tag: `wave-4-baseline`.
+- Wave 5 cerrada funcional y documentalmente.
 - Mantener fiscal opcional por tenant como política de producto.
+- Roadmap oficial siguiente etapa: `docs/roadmap-wave-5-6.md`.
 
 ## Nota de producto
 - La facturación fiscal **no es obligatoria** en el sistema.
