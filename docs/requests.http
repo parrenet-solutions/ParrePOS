@@ -3,6 +3,8 @@
 # Wave 2 (incluye 2.1/2.2): POS, caja, cash movements, sync, handshake/status
 # Wave 3-4: fiscal opcional, documentos, retries, metricas, webhook
 # Wave 5: ops metrics/conflicts, inventario integrado y hardening smoke
+# Wave 6: compras/proveedores, transferencias/conteos, crm, cxc, reportes, integraciones y fiscal prod opcional
+# Wave 7 (bloque A): matriz modular extendida + payments_plus opcional
 
 ### Health
 GET http://localhost/health
@@ -226,6 +228,293 @@ Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
+  "reason": "Reverso de prueba"
+}
+
+### Proveedores: crear (W6-001)
+POST http://localhost/api/v1/suppliers
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "name": "Proveedor Demo SRL",
+  "doc_number": "101123456",
+  "email": "compras@proveedor.demo",
+  "phone": "809-555-0101"
+}
+
+### Proveedores: listar
+GET http://localhost/api/v1/suppliers?q=Demo
+Authorization: Bearer {{access_token}}
+
+### Compras: crear orden (W6-001)
+POST http://localhost/api/v1/purchases/orders
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "supplier_id": 1,
+  "branch_id": 1,
+  "notes": "Orden inicial de reposicion",
+  "items": [
+    {"item_id": 1, "qty": 10, "unit_cost": 85.50},
+    {"item_id": 2, "qty": 6, "unit_cost": 120.00}
+  ]
+}
+
+### Compras: recibir orden
+POST http://localhost/api/v1/purchases/orders/1/receive
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "notes": "Recibido completo"
+}
+
+### Inventory Transfer: crear (W6-002)
+POST http://localhost/api/v1/inventory/transfers
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "from_branch_id": 1,
+  "to_branch_id": 2,
+  "notes": "Reposicion sucursal 2",
+  "items": [
+    {"item_id": 1, "qty": 3},
+    {"item_id": 2, "qty": 5}
+  ]
+}
+
+### Inventory Transfer: dispatch
+POST http://localhost/api/v1/inventory/transfers/1/dispatch
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Inventory Transfer: receive
+POST http://localhost/api/v1/inventory/transfers/1/receive
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Inventory Count: crear (W6-002)
+POST http://localhost/api/v1/inventory/counts
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "branch_id": 1,
+  "notes": "Conteo ciclico",
+  "items": [
+    {"item_id": 1, "counted_qty": 9},
+    {"item_id": 2, "counted_qty": 12}
+  ]
+}
+
+### Inventory Count: close
+POST http://localhost/api/v1/inventory/counts/1/close
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### CRM Segment: crear (W6-003)
+POST http://localhost/api/v1/crm/segments
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "code": "VIP",
+  "name": "Clientes VIP"
+}
+
+### CRM Segment: asignar clientes (W6-003)
+POST http://localhost/api/v1/crm/segments/1/customers
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "customer_ids": [1]
+}
+
+### Pricing List: crear (W6-003)
+POST http://localhost/api/v1/pricing/lists
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "segment_id": 1,
+  "code": "VIP-2026",
+  "name": "Lista VIP 2026",
+  "valid_from": "2026-02-16"
+}
+
+### Pricing List: upsert items (W6-003)
+POST http://localhost/api/v1/pricing/lists/1/items
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "items": [
+    {"item_id": 1, "price": 95.00, "tax_rate": 0.18}
+  ]
+}
+
+### Reporte ejecutivo (W6-004)
+GET http://localhost/api/v1/reports/executive?date_from=2026-02-01&date_to=2026-02-28
+Authorization: Bearer {{access_token}}
+
+### CxC: crear cuenta (W6-005)
+POST http://localhost/api/v1/receivables/accounts
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "customer_id": 1,
+  "origin_type": "MANUAL",
+  "amount_total": 1500,
+  "due_date": "2026-03-01",
+  "notes": "Credito 15 dias"
+}
+
+### CxC: listar cuentas
+GET http://localhost/api/v1/receivables/accounts?customer_id=1&status=OPEN
+Authorization: Bearer {{access_token}}
+
+### CxC: registrar abono
+POST http://localhost/api/v1/receivables/accounts/1/payments
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "amount": 500,
+  "payment_method": "TRANSFER",
+  "reference": "TRX-001",
+  "notes": "Primer abono"
+}
+
+### CxC: aging
+GET http://localhost/api/v1/receivables/aging?as_of=2026-02-16
+Authorization: Bearer {{access_token}}
+
+### Integrations: listar conectores (W6-006)
+GET http://localhost/api/v1/integrations/connectors
+Authorization: Bearer {{access_token}}
+
+### Integrations: upsert conector messaging (W6-006)
+PUT http://localhost/api/v1/integrations/connectors/MESSAGING
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "enabled": true,
+  "provider": "MOCK",
+  "endpoint_url": "",
+  "auth": {"token": ""},
+  "settings": {"channel": "general"}
+}
+
+### Integrations: probar conector messaging (W6-006)
+POST http://localhost/api/v1/integrations/connectors/MESSAGING/test
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Integrations: publicar evento (W6-006)
+POST http://localhost/api/v1/integrations/events/publish
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "connector_code": "MESSAGING",
+  "event_type": "customer.payment.received",
+  "idempotency_key": "ext-evt-001",
+  "payload": {
+    "customer_id": 1,
+    "amount": 500
+  }
+}
+
+### Integrations: listar entregas (W6-006)
+GET http://localhost/api/v1/integrations/deliveries?connector_code=MESSAGING&status=QUEUED&limit=20
+Authorization: Bearer {{access_token}}
+
+### Fiscal: preflight (W6-007)
+GET http://localhost/api/v1/fiscal/preflight
+Authorization: Bearer {{access_token}}
+
+### Fiscal: activar entorno PROD (W6-007)
+POST http://localhost/api/v1/fiscal/environment/prod/activate
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "confirm": "ACTIVAR_FISCAL_PROD"
+}
+
+### Admin SaaS: listar tenants (W6-008)
+GET http://localhost/api/v1/admin/tenants?limit=20
+X-Platform-Admin-Key: {{platform_admin_key}}
+
+### Admin SaaS: detalle tenant (W6-008)
+GET http://localhost/api/v1/admin/tenants/1
+X-Platform-Admin-Key: {{platform_admin_key}}
+
+### Admin SaaS: cambiar estado tenant (W6-008)
+PUT http://localhost/api/v1/admin/tenants/1/status
+X-Platform-Admin-Key: {{platform_admin_key}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Admin SaaS: actualizar módulos tenant (W6-008)
+PUT http://localhost/api/v1/admin/tenants/1/modules
+X-Platform-Admin-Key: {{platform_admin_key}}
+Content-Type: application/json
+
+{
+  "modules": {
+    "pos": {"enabled": true},
+    "fiscal": {"enabled": false}
+  }
+}
+
+### Admin SaaS: actualizar plan/suscripción tenant (W6-008)
+PUT http://localhost/api/v1/admin/tenants/1/subscription
+X-Platform-Admin-Key: {{platform_admin_key}}
+Content-Type: application/json
+
+{
+  "plan_code": "STARTER",
+  "status": "ACTIVE"
+}
+
+### Admin SaaS: listar planes (W6-008)
+GET http://localhost/api/v1/admin/plans
+X-Platform-Admin-Key: {{platform_admin_key}}
+
+### Ops: colas de jobs tenant-safe (W6-009)
+GET http://localhost/api/v1/ops/jobs/queues
+Authorization: Bearer {{access_token}}
+
+### Ops: listar DLQ tenant-safe (W6-009)
+GET http://localhost/api/v1/ops/jobs/dlq?queue_name=jobs:fiscal-submit&limit=20
+Authorization: Bearer {{access_token}}
+
+### Ops: requeue DLQ (W6-009)
+POST http://localhost/api/v1/ops/jobs/dlq/1/requeue
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+{
   "description": "Reverso por error"
 }
 
@@ -437,4 +726,402 @@ Content-Type: application/json
   "device_id": "negative-device",
   "app_version": "2.2.0",
   "capabilities": ["offline", "sync"]
+}
+
+### Payments Plus: status (requiere módulo habilitado + permiso payments_plus.read)
+GET http://localhost/api/v1/payments-plus/status
+Authorization: Bearer {{access_token}}
+
+### Admin SaaS: habilitar módulo payments_plus en tenant 1
+PUT http://localhost/api/v1/admin/tenants/1/modules
+Content-Type: application/json
+X-Platform-Admin-Key: {{platform_admin_key}}
+
+{
+  "modules": {
+    "payments_plus": {"enabled": true}
+  }
+}
+
+### Payments Plus: crear intent (idempotente)
+POST http://localhost/api/v1/payments-plus/transactions/intent
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+X-Idempotency-Key: pp-intent-001
+
+{
+  "sale_id": 1,
+  "channel": "CARD",
+  "amount": 1200,
+  "currency": "DOP",
+  "idempotency_key": "pp-intent-001"
+}
+
+### Payments Plus: listar transacciones
+GET http://localhost/api/v1/payments-plus/transactions?status=CAPTURED&limit=20
+Authorization: Bearer {{access_token}}
+
+### Payments Plus: detalle transacción
+GET http://localhost/api/v1/payments-plus/transactions/1
+Authorization: Bearer {{access_token}}
+
+### Payments Plus: webhook (idempotente por webhook_event_id)
+POST http://localhost/api/v1/payments-plus/webhook
+Content-Type: application/json
+X-Payment-Webhook-Key: dev-payments-key
+
+{
+  "tenant_id": 1,
+  "provider": "MOCK",
+  "webhook_event_id": "pp-wh-001",
+  "external_ref": "PAY-ABCDE12345",
+  "status": "CAPTURED",
+  "amount": 1200,
+  "currency": "DOP"
+}
+
+### Payments Plus: conciliación diaria
+POST http://localhost/api/v1/payments-plus/reconcile/daily
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "date": "2026-02-16",
+  "provider": "MOCK"
+}
+
+### Payments Plus: listar conciliaciones
+GET http://localhost/api/v1/payments-plus/reconciliations?date_from=2026-02-01&date_to=2026-02-29&limit=20
+Authorization: Bearer {{access_token}}
+
+### Admin SaaS: habilitar módulo accounting en tenant 1
+PUT http://localhost/api/v1/admin/tenants/1/modules
+Content-Type: application/json
+X-Platform-Admin-Key: {{platform_admin_key}}
+
+{
+  "modules": {
+    "accounting": {"enabled": true}
+  }
+}
+
+### Accounting: obtener account-map
+GET http://localhost/api/v1/accounting/account-map
+Authorization: Bearer {{access_token}}
+
+### Accounting: upsert account-map
+PUT http://localhost/api/v1/accounting/account-map
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "entries": [
+    {"map_key": "sales.revenue", "account_code": "4100", "description": "Ingresos por ventas", "active": true},
+    {"map_key": "sales.itbis", "account_code": "2101", "description": "ITBIS por pagar", "active": true},
+    {"map_key": "purchases.expense", "account_code": "5100", "description": "Compras", "active": true}
+  ]
+}
+
+### Accounting: export ventas
+GET http://localhost/api/v1/accounting/exports/sales?date_from=2026-02-01&date_to=2026-02-29
+Authorization: Bearer {{access_token}}
+
+### Accounting: export cobros
+GET http://localhost/api/v1/accounting/exports/collections?date_from=2026-02-01&date_to=2026-02-29
+Authorization: Bearer {{access_token}}
+
+### Accounting: export compras
+GET http://localhost/api/v1/accounting/exports/purchases?date_from=2026-02-01&date_to=2026-02-29
+Authorization: Bearer {{access_token}}
+
+### Accounting: cierre de periodo
+POST http://localhost/api/v1/accounting/periods/close
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "period_ym": "2026-02"
+}
+
+### Admin SaaS: habilitar módulo hardware_bridge en tenant 1
+PUT http://localhost/api/v1/admin/tenants/1/modules
+Content-Type: application/json
+X-Platform-Admin-Key: {{platform_admin_key}}
+
+{
+  "modules": {
+    "hardware_bridge": {"enabled": true}
+  }
+}
+
+### Hardware: registrar dispositivo
+POST http://localhost/api/v1/hardware/devices
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "branch_id": 1,
+  "register_id": 1,
+  "device_code": "PRN-CAJA-01",
+  "name": "Impresora Caja 1",
+  "type": "PRINTER",
+  "connection": {"driver": "mock", "host": "127.0.0.1", "port": 9100}
+}
+
+### Hardware: listar dispositivos
+GET http://localhost/api/v1/hardware/devices?limit=20
+Authorization: Bearer {{access_token}}
+
+### Hardware: crear print job
+POST http://localhost/api/v1/hardware/print-jobs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+X-Idempotency-Key: hw-print-001
+
+{
+  "device_id": 1,
+  "sale_id": 1,
+  "template": "POS_TICKET",
+  "idempotency_key": "hw-print-001",
+  "payload": {
+    "ticket_number": "T-1001",
+    "total": 450
+  }
+}
+
+### Hardware: listar print jobs
+GET http://localhost/api/v1/hardware/print-jobs?status=QUEUED&limit=20
+Authorization: Bearer {{access_token}}
+
+### Hardware: abrir gaveta
+POST http://localhost/api/v1/hardware/devices/1/drawer/open
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Hardware: health dispositivo
+GET http://localhost/api/v1/hardware/devices/1/health
+Authorization: Bearer {{access_token}}
+
+### Inventory: upsert políticas min/max
+PUT http://localhost/api/v1/inventory/policies/minmax
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "entries": [
+    {
+      "branch_id": 1,
+      "item_id": 1,
+      "min_qty": 5,
+      "max_qty": 25,
+      "reorder_qty": 20,
+      "lead_time_days": 2,
+      "status": "ACTIVE"
+    }
+  ]
+}
+
+### Inventory: listar políticas min/max
+GET http://localhost/api/v1/inventory/policies/minmax?branch_id=1&limit=50
+Authorization: Bearer {{access_token}}
+
+### Inventory: alertas de stock
+GET http://localhost/api/v1/inventory/alerts?branch_id=1&alert_type=LOW_STOCK&limit=50
+Authorization: Bearer {{access_token}}
+
+### Ops: cierre diario
+POST http://localhost/api/v1/ops/daily-close
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "branch_id": 1,
+  "close_date": "2026-02-16",
+  "declared_cash": 12500.00,
+  "notes": "Cierre supervisor"
+}
+
+### Ops: listar cierres diarios
+GET http://localhost/api/v1/ops/daily-close?branch_id=1&date_from=2026-02-01&date_to=2026-02-29&limit=20
+Authorization: Bearer {{access_token}}
+
+### Ops: obtener cierre diario
+GET http://localhost/api/v1/ops/daily-close/1
+Authorization: Bearer {{access_token}}
+
+### Ops: reabrir cierre diario
+POST http://localhost/api/v1/ops/daily-close/1/reopen
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "reason": "Ajuste por arqueo pendiente"
+}
+
+### Admin SaaS: habilitar módulo backup_ops en tenant 1
+PUT http://localhost/api/v1/admin/tenants/1/modules
+Content-Type: application/json
+X-Platform-Admin-Key: {{platform_admin_key}}
+
+{
+  "modules": {
+    "backup_ops": {"enabled": true}
+  }
+}
+
+### BackupOps: crear snapshot lógico
+POST http://localhost/api/v1/backup/snapshots
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "snapshot_type": "LOGICAL",
+  "metadata": {
+    "scope": "tenant_full",
+    "notes": "Snapshot operativo previo a mantenimiento"
+  }
+}
+
+### BackupOps: listar snapshots
+GET http://localhost/api/v1/backup/snapshots?status=DONE&limit=20
+Authorization: Bearer {{access_token}}
+
+### BackupOps: crear restore run
+POST http://localhost/api/v1/backup/restores
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "backup_snapshot_id": 1,
+  "mode": "DRY_RUN",
+  "summary": {
+    "requested_reason": "Prueba de recuperación controlada"
+  }
+}
+
+### BackupOps: listar restore runs
+GET http://localhost/api/v1/backup/restores?status=DONE&limit=20
+Authorization: Bearer {{access_token}}
+
+### BackupOps: runbook técnico
+GET http://localhost/api/v1/backup/runbook
+Authorization: Bearer {{access_token}}
+
+### Admin SaaS: habilitar módulo security_plus en tenant 1
+PUT http://localhost/api/v1/admin/tenants/1/modules
+Content-Type: application/json
+X-Platform-Admin-Key: {{platform_admin_key}}
+
+{
+  "modules": {
+    "security_plus": {"enabled": true}
+  }
+}
+
+### SecurityPlus: estado módulo/usuario
+GET http://localhost/api/v1/security-plus/status
+Authorization: Bearer {{access_token}}
+
+### SecurityPlus: enrolar MFA TOTP
+PUT http://localhost/api/v1/security-plus/mfa/totp
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "method": "TOTP",
+  "secret": "demo-super-secret"
+}
+
+### SecurityPlus: verificar MFA TOTP
+POST http://localhost/api/v1/security-plus/mfa/verify
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "method": "TOTP",
+  "code": "123456"
+}
+
+### SecurityPlus: listar métodos MFA
+GET http://localhost/api/v1/security-plus/mfa/methods
+Authorization: Bearer {{access_token}}
+
+### SecurityPlus: rotar secreto operativo
+POST http://localhost/api/v1/security-plus/secrets/rotate
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "secret_key": "platform.api_key",
+  "new_secret": "nuevo-secreto-seguro-2026"
+}
+
+### SecurityPlus: listar rotaciones
+GET http://localhost/api/v1/security-plus/secrets/rotations?secret_key=platform.api_key&limit=20
+Authorization: Bearer {{access_token}}
+
+### Ops: SLI/SLO snapshot
+GET http://localhost/api/v1/ops/sli-slo
+Authorization: Bearer {{access_token}}
+
+### Ops: upsert reglas de alertas
+PUT http://localhost/api/v1/ops/alerts/rules
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "entries": [
+    {
+      "code": "sync_error_high",
+      "metric_key": "sync.error_rate_pct",
+      "comparator": "GTE",
+      "threshold_value": 5,
+      "severity": "WARN",
+      "channel": "INTERNAL",
+      "enabled": true
+    }
+  ]
+}
+
+### Ops: listar reglas de alertas
+GET http://localhost/api/v1/ops/alerts/rules?enabled=1
+Authorization: Bearer {{access_token}}
+
+### Ops: evaluar alertas
+POST http://localhost/api/v1/ops/alerts/evaluate
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Ops: incidentes
+GET http://localhost/api/v1/ops/incidents?status=OPEN&limit=20
+Authorization: Bearer {{access_token}}
+
+### Ops: diagnóstico de tenant
+GET http://localhost/api/v1/ops/diagnostics
+Authorization: Bearer {{access_token}}
+
+### Ops: plantillas de onboarding
+GET http://localhost/api/v1/ops/onboarding/templates
+Authorization: Bearer {{access_token}}
+
+### Ops: obtener checklist onboarding
+GET http://localhost/api/v1/ops/onboarding/checklist?template_code=retail_basic
+Authorization: Bearer {{access_token}}
+
+### Ops: actualizar checklist onboarding
+PUT http://localhost/api/v1/ops/onboarding/checklist
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "template_code": "retail_basic",
+  "items": [
+    {"step": "Configurar tenant (datos fiscales opcionales).", "done": true},
+    {"step": "Crear sucursal principal y caja.", "done": true},
+    {"step": "Configurar catálogo inicial de ítems.", "done": false}
+  ]
 }

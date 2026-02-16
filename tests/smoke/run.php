@@ -14,6 +14,7 @@ declare(strict_types=1);
  *   SMOKE_EMAIL=admin@demo.local
  *   SMOKE_PASSWORD=Admin12345!
  *   SMOKE_MODE=positive|negative|all
+ *   SMOKE_PLATFORM_ADMIN_KEY=... (opcional para pruebas W6-008)
  */
 
 $baseUrl = rtrim(envValue('SMOKE_BASE_URL', 'http://localhost'), '/');
@@ -328,6 +329,194 @@ function runPositiveFlow(string $baseUrl, array &$ctx): void
         }
     });
 
+    runStep('Ops Jobs Queues', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/ops/jobs/queues',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'ops.jobs.queues');
+        assertApiOk($res, 'ops.jobs.queues');
+
+        $rows = $res['json']['data'] ?? null;
+        if (!is_array($rows)) {
+            fail('ops.jobs.queues: data invalido');
+        }
+    });
+
+    runStep('Ops DLQ List', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/ops/jobs/dlq?limit=10',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'ops.jobs.dlq');
+        assertApiOk($res, 'ops.jobs.dlq');
+
+        $rows = $res['json']['data'] ?? null;
+        if (!is_array($rows)) {
+            fail('ops.jobs.dlq: data invalido');
+        }
+    });
+
+    runStep('Ops SLI/SLO Alerts and Onboarding', function () use ($baseUrl, &$ctx): void {
+        $headers = authHeaders($ctx['access_token']);
+
+        $sli = requestJson('GET', $baseUrl . '/api/v1/ops/sli-slo', null, $headers);
+        assertStatus($sli, 200, 'ops.sli-slo');
+        assertApiOk($sli, 'ops.sli-slo');
+        assertArrayHasKeys((array) ($sli['json']['data'] ?? []), ['captured_at', 'sli', 'slo'], 'ops.sli-slo.schema');
+
+        $rules = requestJson(
+            'PUT',
+            $baseUrl . '/api/v1/ops/alerts/rules',
+            [
+                'entries' => [[
+                    'code' => 'sync_error_high',
+                    'metric_key' => 'sync.error_rate_pct',
+                    'comparator' => 'GTE',
+                    'threshold_value' => 0,
+                    'severity' => 'WARN',
+                    'channel' => 'INTERNAL',
+                    'enabled' => true,
+                ]],
+            ],
+            $headers
+        );
+        assertStatus($rules, 200, 'ops.alert-rules.upsert');
+        assertApiOk($rules, 'ops.alert-rules.upsert');
+
+        $eval = requestJson('POST', $baseUrl . '/api/v1/ops/alerts/evaluate', [], $headers);
+        assertStatus($eval, 200, 'ops.alerts.evaluate');
+        assertApiOk($eval, 'ops.alerts.evaluate');
+        assertArrayHasKeys((array) ($eval['json']['data'] ?? []), ['captured_at', 'triggered', 'triggered_count'], 'ops.alerts.evaluate.schema');
+
+        $diagnostic = requestJson('GET', $baseUrl . '/api/v1/ops/diagnostics', null, $headers);
+        assertStatus($diagnostic, 200, 'ops.diagnostics');
+        assertApiOk($diagnostic, 'ops.diagnostics');
+        assertArrayHasKeys((array) ($diagnostic['json']['data'] ?? []), ['score', 'checks'], 'ops.diagnostics.schema');
+
+        $templates = requestJson('GET', $baseUrl . '/api/v1/ops/onboarding/templates', null, $headers);
+        assertStatus($templates, 200, 'ops.onboarding.templates');
+        assertApiOk($templates, 'ops.onboarding.templates');
+        $tplRows = $templates['json']['data'] ?? null;
+        if (!is_array($tplRows) || $tplRows === []) {
+            fail('ops.onboarding.templates: templates vacías');
+        }
+
+        $checklist = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/ops/onboarding/checklist?template_code=retail_basic',
+            null,
+            $headers
+        );
+        assertStatus($checklist, 200, 'ops.onboarding.checklist.get');
+        assertApiOk($checklist, 'ops.onboarding.checklist.get');
+    });
+
+    $platformAdminKey = envValue('SMOKE_PLATFORM_ADMIN_KEY', '');
+    runStep('Admin SaaS Tenants List', function () use ($baseUrl, $platformAdminKey): void {
+        if ($platformAdminKey === '') {
+            smokeInfo('admin.saas.tenants: sin SMOKE_PLATFORM_ADMIN_KEY, se omite verificación.');
+            return;
+        }
+
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/admin/tenants?limit=5',
+            null,
+            platformAdminHeaders($platformAdminKey)
+        );
+        assertStatus($res, 200, 'admin.saas.tenants');
+        assertApiOk($res, 'admin.saas.tenants');
+        $rows = $res['json']['data'] ?? null;
+        if (!is_array($rows)) {
+            fail('admin.saas.tenants: data invalido');
+        }
+    });
+
+    runStep('Integrations Connector Upsert', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'PUT',
+            $baseUrl . '/api/v1/integrations/connectors/MESSAGING',
+            [
+                'enabled' => true,
+                'provider' => 'MOCK',
+                'endpoint_url' => '',
+                'auth' => ['token' => ''],
+                'settings' => ['channel' => 'smoke'],
+            ],
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'integrations.connector.upsert');
+        assertApiOk($res, 'integrations.connector.upsert');
+
+        $code = (string) ($res['json']['data']['code'] ?? '');
+        if (strtoupper($code) !== 'MESSAGING') {
+            fail('integrations.connector.upsert: code inválido');
+        }
+    });
+
+    runStep('Integrations Connector Test', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'POST',
+            $baseUrl . '/api/v1/integrations/connectors/MESSAGING/test',
+            [],
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'integrations.connector.test');
+        assertApiOk($res, 'integrations.connector.test');
+        if ((bool) ($res['json']['data']['ok'] ?? false) !== true) {
+            fail('integrations.connector.test: se esperaba ok=true');
+        }
+    });
+
+    runStep('Integrations Publish Event', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'POST',
+            $baseUrl . '/api/v1/integrations/events/publish',
+            [
+                'connector_code' => 'MESSAGING',
+                'event_type' => 'smoke.event.ping',
+                'idempotency_key' => 'smoke-ext-' . bin2hex(random_bytes(4)),
+                'payload' => [
+                    'origin' => 'smoke',
+                    'ts' => gmdate('c'),
+                ],
+            ],
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 202, 'integrations.publish');
+        assertApiOk($res, 'integrations.publish');
+        $deliveryId = (int) ($res['json']['data']['delivery_id'] ?? 0);
+        if ($deliveryId <= 0) {
+            fail('integrations.publish: delivery_id inválido');
+        }
+    });
+
+    runStep('Integrations Deliveries List', function () use ($baseUrl, &$ctx): void {
+        $res = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/integrations/deliveries?connector_code=MESSAGING&limit=5',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+
+        assertStatus($res, 200, 'integrations.deliveries');
+        assertApiOk($res, 'integrations.deliveries');
+        $rows = $res['json']['data'] ?? null;
+        if (!is_array($rows)) {
+            fail('integrations.deliveries: data inválido');
+        }
+    });
+
     runStep('Fiscal Status', function () use ($baseUrl, &$ctx): void {
         $res = requestJson(
             'GET',
@@ -521,6 +710,67 @@ function runPositiveFlow(string $baseUrl, array &$ctx): void
 
         $afterVoid = getInventoryStock($baseUrl, $ctx['access_token'], $ctx['branch_id'], $itemId);
         assertFloatEquals($afterVoid, $before, 'pos.inventory.sale.void.reverse');
+    });
+
+    runStep('Inventory Policies and Alerts', function () use ($baseUrl, &$ctx): void {
+        $itemId = (int) ($ctx['inventory_item_id'] ?? 0);
+        if ($itemId <= 0) {
+            fail('inventory.policies: item no inicializado');
+        }
+
+        $upsert = requestJson(
+            'PUT',
+            $baseUrl . '/api/v1/inventory/policies/minmax',
+            [
+                'entries' => [[
+                    'branch_id' => $ctx['branch_id'],
+                    'item_id' => $itemId,
+                    'min_qty' => 20,
+                    'max_qty' => 40,
+                    'reorder_qty' => 25,
+                    'lead_time_days' => 2,
+                    'status' => 'ACTIVE',
+                ]],
+            ],
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($upsert, 200, 'inventory.policies.upsert');
+        assertApiOk($upsert, 'inventory.policies.upsert');
+
+        $alerts = requestJson(
+            'GET',
+            $baseUrl . '/api/v1/inventory/alerts?branch_id=' . $ctx['branch_id'] . '&alert_type=LOW_STOCK&limit=20',
+            null,
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($alerts, 200, 'inventory.alerts');
+        assertApiOk($alerts, 'inventory.alerts');
+
+        $rows = $alerts['json']['data'] ?? null;
+        if (!is_array($rows) || $rows === []) {
+            fail('inventory.alerts: se esperaba al menos una alerta LOW_STOCK');
+        }
+    });
+
+    runStep('Ops Daily Close', function () use ($baseUrl, &$ctx): void {
+        $closeDate = gmdate('Y-m-d');
+        $close = requestJson(
+            'POST',
+            $baseUrl . '/api/v1/ops/daily-close',
+            [
+                'branch_id' => $ctx['branch_id'],
+                'close_date' => $closeDate,
+                'declared_cash' => 1000.00,
+                'notes' => 'Smoke close',
+            ],
+            authHeaders($ctx['access_token'])
+        );
+        assertStatus($close, 200, 'ops.daily-close');
+        assertApiOk($close, 'ops.daily-close');
+        $id = (int) ($close['json']['data']['id'] ?? 0);
+        if ($id <= 0) {
+            fail('ops.daily-close: id inválido');
+        }
     });
 
     runStep('Sync Ingest Idempotency Duplicate', function () use ($baseUrl, &$ctx): void {
@@ -770,6 +1020,131 @@ function runNegativeFlow(string $baseUrl, array $ctx, PDO $db): void
         }
     });
 
+    runStep('PaymentsPlus MODULE_DISABLED', function () use ($baseUrl, $ctx, $db): void {
+        $tenantId = (int) $ctx['tenant_id'];
+        $previousModules = getTenantModulesRaw($db, $tenantId);
+        if ($previousModules === null) {
+            fail('payments-plus.module.disabled: tenant_settings no encontrado');
+        }
+
+        try {
+            $disabled = disableModuleInTenantSettings($previousModules, 'payments_plus');
+            setTenantModulesRaw($db, $tenantId, $disabled);
+
+            $res = requestJson(
+                'GET',
+                $baseUrl . '/api/v1/payments-plus/status',
+                null,
+                authHeaders($ctx['access_token'])
+            );
+
+            assertStatus($res, 403, 'payments-plus.module.disabled');
+            assertApiError($res, 'MODULE_DISABLED', 'payments-plus.module.disabled');
+        } finally {
+            setTenantModulesRaw($db, $tenantId, $previousModules);
+        }
+    });
+
+    runStep('Accounting MODULE_DISABLED', function () use ($baseUrl, $ctx, $db): void {
+        $tenantId = (int) $ctx['tenant_id'];
+        $previousModules = getTenantModulesRaw($db, $tenantId);
+        if ($previousModules === null) {
+            fail('accounting.module.disabled: tenant_settings no encontrado');
+        }
+
+        try {
+            $disabled = disableModuleInTenantSettings($previousModules, 'accounting');
+            setTenantModulesRaw($db, $tenantId, $disabled);
+
+            $res = requestJson(
+                'GET',
+                $baseUrl . '/api/v1/accounting/exports/sales',
+                null,
+                authHeaders($ctx['access_token'])
+            );
+
+            assertStatus($res, 403, 'accounting.module.disabled');
+            assertApiError($res, 'MODULE_DISABLED', 'accounting.module.disabled');
+        } finally {
+            setTenantModulesRaw($db, $tenantId, $previousModules);
+        }
+    });
+
+    runStep('HardwareBridge MODULE_DISABLED', function () use ($baseUrl, $ctx, $db): void {
+        $tenantId = (int) $ctx['tenant_id'];
+        $previousModules = getTenantModulesRaw($db, $tenantId);
+        if ($previousModules === null) {
+            fail('hardware.module.disabled: tenant_settings no encontrado');
+        }
+
+        try {
+            $disabled = disableModuleInTenantSettings($previousModules, 'hardware_bridge');
+            setTenantModulesRaw($db, $tenantId, $disabled);
+
+            $res = requestJson(
+                'GET',
+                $baseUrl . '/api/v1/hardware/devices',
+                null,
+                authHeaders($ctx['access_token'])
+            );
+
+            assertStatus($res, 403, 'hardware.module.disabled');
+            assertApiError($res, 'MODULE_DISABLED', 'hardware.module.disabled');
+        } finally {
+            setTenantModulesRaw($db, $tenantId, $previousModules);
+        }
+    });
+
+    runStep('BackupOps MODULE_DISABLED', function () use ($baseUrl, $ctx, $db): void {
+        $tenantId = (int) $ctx['tenant_id'];
+        $previousModules = getTenantModulesRaw($db, $tenantId);
+        if ($previousModules === null) {
+            fail('backup-ops.module.disabled: tenant_settings no encontrado');
+        }
+
+        try {
+            $disabled = disableModuleInTenantSettings($previousModules, 'backup_ops');
+            setTenantModulesRaw($db, $tenantId, $disabled);
+
+            $res = requestJson(
+                'GET',
+                $baseUrl . '/api/v1/backup/snapshots',
+                null,
+                authHeaders($ctx['access_token'])
+            );
+
+            assertStatus($res, 403, 'backup-ops.module.disabled');
+            assertApiError($res, 'MODULE_DISABLED', 'backup-ops.module.disabled');
+        } finally {
+            setTenantModulesRaw($db, $tenantId, $previousModules);
+        }
+    });
+
+    runStep('SecurityPlus MODULE_DISABLED', function () use ($baseUrl, $ctx, $db): void {
+        $tenantId = (int) $ctx['tenant_id'];
+        $previousModules = getTenantModulesRaw($db, $tenantId);
+        if ($previousModules === null) {
+            fail('security-plus.module.disabled: tenant_settings no encontrado');
+        }
+
+        try {
+            $disabled = disableModuleInTenantSettings($previousModules, 'security_plus');
+            setTenantModulesRaw($db, $tenantId, $disabled);
+
+            $res = requestJson(
+                'GET',
+                $baseUrl . '/api/v1/security-plus/status',
+                null,
+                authHeaders($ctx['access_token'])
+            );
+
+            assertStatus($res, 403, 'security-plus.module.disabled');
+            assertApiError($res, 'MODULE_DISABLED', 'security-plus.module.disabled');
+        } finally {
+            setTenantModulesRaw($db, $tenantId, $previousModules);
+        }
+    });
+
     runStep('Fiscal Config Validation', function () use ($baseUrl, $ctx): void {
         $res = requestJson(
             'PUT',
@@ -870,19 +1245,27 @@ function setTenantModulesRaw(PDO $db, int $tenantId, string $raw): void
 
 function disableModulePos(string $modulesRaw): string
 {
+    return disableModuleInTenantSettings($modulesRaw, 'pos');
+}
+
+function disableModuleInTenantSettings(string $modulesRaw, string $module): string
+{
     $decoded = json_decode($modulesRaw, true);
     if (!is_array($decoded)) {
         return json_encode([], JSON_UNESCAPED_UNICODE) ?: '[]';
     }
 
     if (isset($decoded['modules']) && is_array($decoded['modules'])) {
-        $decoded['modules']['pos']['enabled'] = false;
+        if (!isset($decoded['modules'][$module]) || !is_array($decoded['modules'][$module])) {
+            $decoded['modules'][$module] = [];
+        }
+        $decoded['modules'][$module]['enabled'] = false;
         return json_encode($decoded, JSON_UNESCAPED_UNICODE) ?: $modulesRaw;
     }
 
     $filtered = [];
     foreach ($decoded as $value) {
-        if (is_string($value) && $value !== 'pos') {
+        if (is_string($value) && $value !== $module) {
             $filtered[] = $value;
         }
     }
@@ -1134,6 +1517,11 @@ function requestJson(string $method, string $url, ?array $payload = null, array 
 function authHeaders(string $accessToken): array
 {
     return ['Authorization: Bearer ' . $accessToken];
+}
+
+function platformAdminHeaders(string $adminKey): array
+{
+    return ['X-Platform-Admin-Key: ' . $adminKey];
 }
 
 function assertStatus(array $res, int $expected, string $scope): void

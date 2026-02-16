@@ -277,8 +277,24 @@ function seedDev(): void
             'branches.manage',
             'sync.read',
             'sync.write',
+            'integration.read',
+            'integration.manage',
             'fiscal.read',
             'fiscal.manage',
+            'ops.daily_close.read',
+            'ops.daily_close.manage',
+            'ops.alerts.manage',
+            'ops.onboarding.manage',
+            'payments_plus.read',
+            'payments_plus.manage',
+            'accounting.read',
+            'accounting.manage',
+            'hardware_bridge.read',
+            'hardware_bridge.manage',
+            'backup_ops.read',
+            'backup_ops.manage',
+            'security_plus.read',
+            'security_plus.manage',
         ]);
         upsertRolePermissions($db, $tenantId, $roleId, $permissionIds);
         $userId = upsertAdminUser($db, $tenantId);
@@ -320,7 +336,13 @@ function upsertTenantSettings(PDO $db, int $tenantId): void
             'pos' => ['enabled' => true],
             'inventory' => ['enabled' => true],
             'recurring' => ['enabled' => true],
+            'integrations' => ['enabled' => true],
             'fiscal' => ['enabled' => false],
+            'payments_plus' => ['enabled' => false],
+            'accounting' => ['enabled' => false],
+            'hardware_bridge' => ['enabled' => false],
+            'backup_ops' => ['enabled' => false],
+            'security_plus' => ['enabled' => false],
         ],
         'fiscal' => [
             'enabled' => false,
@@ -334,6 +356,13 @@ function upsertTenantSettings(PDO $db, int $tenantId): void
                 'daily_max' => 0,
                 'monthly_max' => 0,
             ],
+        ],
+        'payments_plus' => [
+            'enabled' => false,
+            'provider' => 'MOCK',
+            'channels' => ['CARD', 'TRANSFER'],
+            'webhook_key' => '',
+            'auto_reconcile' => false,
         ],
         'security' => [
             'password_policy' => [
@@ -360,7 +389,7 @@ function upsertStarterPlan(PDO $db): int
 {
     $code = 'STARTER';
     $name = 'Starter';
-    $modules = ['invoicing', 'pos', 'inventory', 'recurring'];
+    $modules = ['invoicing', 'pos', 'inventory', 'recurring', 'integrations', 'payments_plus', 'accounting', 'hardware_bridge', 'backup_ops', 'security_plus'];
     $limits = [
         'users.max' => 100,
         'branches.max' => 200,

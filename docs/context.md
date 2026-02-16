@@ -1,6 +1,6 @@
 # Contexto Canonico del Proyecto ParrePOS
 
-Fecha de actualizacion: `2026-02-15`
+Fecha de actualizacion: `2026-02-16`
 
 ## Indice
 - [1. Proposito de este documento](#1-proposito-de-este-documento)
@@ -23,7 +23,8 @@ Este archivo define la fuente de verdad tecnica y operativa para desarrollo, QA 
 - `Wave 3` Fiscal opcional (base funcional): cerrada.
 - `Wave 4` Robustez fiscal y operativa: cerrada.
 - `Wave 5` Operacion SaaS (planes, inventario, observabilidad, hardening): cerrada.
-- `Wave 6` Expansiones comerciales (CxC, compras, reporteria ejecutiva, integraciones): planificada.
+- `Wave 6` Expansiones comerciales (CxC, compras, reporteria ejecutiva, integraciones): cerrada.
+- `Wave 7` Módulos opcionales comerciales/operativos (payments_plus, accounting, hardware, backup_ops, security_plus): en ejecución.
 
 ## 3. Principios obligatorios
 1. Multi-tenant estricto.
@@ -32,7 +33,7 @@ Este archivo define la fuente de verdad tecnica y operativa para desarrollo, QA 
 - Cero acceso cruzado entre tenants.
 
 2. Modularidad por tenant y plan.
-- Modulos habilitables: `pos`, `inventory`, `recurring`, `fiscal`.
+- Modulos habilitables: `pos`, `inventory`, `recurring`, `fiscal`, `integrations`, `payments_plus`, `accounting`, `hardware_bridge`, `backup_ops`, `security_plus`.
 - Bloqueo por modulo deshabilitado en API y ocultamiento en UI.
 
 3. Seguridad first-class.
@@ -54,8 +55,15 @@ Este archivo define la fuente de verdad tecnica y operativa para desarrollo, QA 
 - `POS`: sucursales, cajas, sesiones de caja, ventas, pagos, hold/resume.
 - `Sync`: ingest/status/eventos, idempotencia, conflictos por `op_id`.
 - `Inventory`: movimientos, stock por sucursal, integracion con POS.
+- `Inventory`: movimientos, stock por sucursal, políticas min/max y alertas de reposición.
 - `Fiscal`: configuracion, documentos, eventos/acuses, retry, metricas, webhook.
+- `Integrations`: conectores externos por tenant (pagos, mensajería, contable) con cola y trazabilidad.
+- `PaymentsPlus`: pasarela de pagos opcional, intents, webhooks idempotentes y conciliación diaria.
+- `Accounting`: exportaciones contables y cierre de período opcional por tenant.
+- `HardwareBridge`: gestión de dispositivos POS, cola de impresión y eventos de hardware.
+- `AdminSaaS`: gobierno central de tenants/planes/módulos por llave de plataforma.
 - `Ops`: metricas por tenant y soporte operacional.
+- `Ops`: métricas por tenant, soporte operacional y cierre diario de operación.
 
 ## 5. Seguridad y RBAC
 - Contexto minimo por request autenticado:
@@ -84,10 +92,46 @@ Prefijo general: `/api/v1`
   - `/sync/events`, `/sync/status`
 - `Inventory`
   - `/inventory/movements`, `/inventory/stock`
+  - `/inventory/policies/minmax`, `/inventory/alerts`
+  - `/inventory/transfers`, `/inventory/transfers/{id}/dispatch`, `/inventory/transfers/{id}/receive`
+  - `/inventory/counts`, `/inventory/counts/{id}/close`
+  - `/suppliers`, `/purchases/orders`, `/purchases/orders/{id}/receive`
+- `CRM/Pricing`
+  - `/crm/segments`, `/crm/segments/{id}/customers`
+  - `/pricing/lists`, `/pricing/lists/{id}/items`
+- `Reports`
+  - `/reports/executive`
+- `Receivables`
+  - `/receivables/accounts`, `/receivables/accounts/{id}/payments`, `/receivables/aging`
+- `Integrations`
+  - `/integrations/connectors`, `/integrations/connectors/{code}`, `/integrations/connectors/{code}/test`
+  - `/integrations/events/publish`, `/integrations/deliveries`
+- `PaymentsPlus`
+  - `/payments-plus/status`, `/payments-plus/transactions/intent`
+  - `/payments-plus/transactions`, `/payments-plus/transactions/{id}`
+  - `/payments-plus/reconcile/daily`, `/payments-plus/reconciliations`
+  - `/payments-plus/webhook` (público con key)
+- `Accounting`
+  - `/accounting/exports/sales`, `/accounting/exports/collections`, `/accounting/exports/purchases`
+  - `/accounting/account-map`, `/accounting/periods/close`
+- `HardwareBridge`
+  - `/hardware/devices`, `/hardware/print-jobs`
+  - `/hardware/devices/{id}/drawer/open`, `/hardware/devices/{id}/health`
+- `BackupOps`
+  - `/backup/snapshots`, `/backup/restores`, `/backup/runbook`
+- `SecurityPlus`
+  - `/security-plus/status`, `/security-plus/mfa/totp`, `/security-plus/mfa/verify`
+  - `/security-plus/mfa/methods`, `/security-plus/secrets/rotate`, `/security-plus/secrets/rotations`
 - `Fiscal`
-  - `/fiscal/status`, `/fiscal/config`, `/fiscal/documents*`, `/fiscal/metrics`, `/fiscal/webhook/ack`
+  - `/fiscal/status`, `/fiscal/preflight`, `/fiscal/config`, `/fiscal/environment/prod/activate`, `/fiscal/documents*`, `/fiscal/metrics`, `/fiscal/webhook/ack`
 - `Ops`
-  - `/ops/tenant-metrics`, `/ops/sync-conflicts`
+  - `/ops/tenant-metrics`, `/ops/sync-conflicts`, `/ops/jobs/queues`, `/ops/jobs/dlq`, `/ops/jobs/dlq/{id}/requeue`
+  - `/ops/daily-close`, `/ops/daily-close/{id}`, `/ops/daily-close/{id}/reopen`
+  - `/ops/sli-slo`, `/ops/alerts/rules`, `/ops/alerts/evaluate`, `/ops/incidents`
+  - `/ops/diagnostics`, `/ops/onboarding/templates`, `/ops/onboarding/checklist`
+- `Admin SaaS` (llave de plataforma)
+  - `/admin/tenants`, `/admin/tenants/{id}`, `/admin/tenants/{id}/status`
+  - `/admin/tenants/{id}/modules`, `/admin/tenants/{id}/subscription`, `/admin/plans`
 
 ## 7. Reglas de datos y migraciones
 - Motor: MariaDB + InnoDB + utf8mb4.
